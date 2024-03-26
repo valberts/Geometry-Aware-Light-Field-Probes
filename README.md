@@ -1,5 +1,13 @@
 ﻿# 3dcg-final-project
 
+## Controls
+
+`Add basic controls (like how to move the camera/switch between viewpoints here)`
+
+### Views
+
+### Animate Robot Arm
+
 ## Minimal features:
 
 - [ ] Multiple viewpoints. For example, a top view and a third-person camera that follows a character. The position and movement of the camera is up to you. You can also create a cutscene to add new viewpoints.
