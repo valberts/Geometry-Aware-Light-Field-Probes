@@ -24,9 +24,9 @@ The final project grade is capped to a maximum of 10 points for each student.
 - Part 2 minimum requirements: max 4 points
 - Part 3 extra features: unlimited
 
-### Submission
+## Submission
 
-- the source code (do not include build files!)
-- a short report (max 500 words) of the implemented techniques each accompanied by at least two screen shots (more are welcome) to well illustrate each method. Do not forget to include references!
-- a list of the work done by each individual group member with a percentage indication (first page of report, not included in the word count).
-- a video for your tech-demo. No slides are necessary, your demo should showcase all your features. Max 4 minutes! Since there is no live presentation your video will be posted in Brightspace so other groups can also appreciate your work.
+- [ ] the source code (do not include build files!)
+- [ ] a short report (max 500 words) of the implemented techniques each accompanied by at least two screen shots (more are welcome) to well illustrate each method. Do not forget to include references!
+- [ ] a list of the work done by each individual group member with a percentage indication (first page of report, not included in the word count).
+- [ ] a video for your tech-demo. No slides are necessary, your demo should showcase all your features. Max 4 minutes! Since there is no live presentation your video will be posted in Brightspace so other groups can also appreciate your work.
