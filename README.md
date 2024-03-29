@@ -20,7 +20,22 @@
 
 ## Extra effects:
 
-...
+For example: (but we can come up with any others)
+- [ ] Move at constant speed along Bézier curve
+- [ ] Particle effects (explosions, magic spells, fire)
+- [ ] Point-lights like torches or light bulbs
+- [ ] The illusion of an infinite terrain by adding new tiles on the fly
+- [ ] Post-processing effects
+- [ ] Procedurally generated terrains
+- [ ] Water surfaces that are procedurally generated (produce a vertex grid and move the vertices according to a combination of several sinus functions that you can evaluate in the vertex shader).
+- [ ] Animated textures (by switching textures frame to frame)
+- [ ] Zoom effects / perspective changes
+- [ ] Changing lighting conditions (like a day-night system)
+- [ ] A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
+- [ ] Collision between the player and objects
+- [ ] Generate a maze or dungeon for the player to move through
+- [ ] Generate environment props like procedural buildings
+- [ ] Inverse kinematics
 
 ## Grading
 
@@ -31,6 +46,10 @@ The final project grade is capped to a maximum of 10 points for each student.
 - Part 1: max 2 points
 - Part 2 minimum requirements: max 4 points
 - Part 3 extra features: unlimited
+
+You can also enrich your demo by using 3D models and textures from external sources. Make sure you have the correct rights to use the models and that you reference any third-party assets in your report.
+
+You are judged on the graphics techniques you used and how well they were applied. In short, the artistic aspects of your demo are nice to have but should not be necessary to achieve a high grade. Still, try to be creative and make a demo that you are proud of!
 
 ## Submission
 
