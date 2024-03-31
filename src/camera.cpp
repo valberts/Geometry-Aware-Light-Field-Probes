@@ -92,6 +92,10 @@ void Camera::setPos(glm::vec3 newPos)
 {
     if (m_userInteraction) {
         m_position = newPos;
+        const glm::vec3 horAxis = glm::cross(s_yAxis, m_forward);
+
+        m_forward = glm::normalize(-newPos);
+        m_up = glm::normalize(glm::cross(m_forward, horAxis));
     }
     else {
         m_prevCursorPos = m_pWindow->getCursorPos();

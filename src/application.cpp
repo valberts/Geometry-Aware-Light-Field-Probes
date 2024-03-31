@@ -88,7 +88,7 @@ public:
             ImGui::Checkbox("Use material if no texture", &m_useMaterial);
             
 
-            if (!isCameraMoving && ImGui::Button("Start Camera Motion") && m_blist.size() > 3)
+            if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
             {
                 // Start camera motion
                 isCameraMoving = true;
@@ -96,10 +96,10 @@ public:
             }
 
             if (isCameraMoving) {
-                cameraMovementTime += 0.01f;
-                UpdateCameraPosition(cameraMovementTime);
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                UpdateCameraPosition(0.5f);
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
+
 
             ImGui::End();
 
@@ -191,10 +191,11 @@ public:
             //x = 1.0f - (2.0f * m_mousePos.x) / size.x;
             //y = (2.0f * m_mousePos.y) / size.y - 1.0f;
             //m_blist.push_back(glm::vec3(float(x), float(y), 0.0f)); // TODO: set z
+            m_blist.push_back(glm::vec3(1.0f, 0.0f, 0.5f));
             m_blist.push_back(glm::vec3(1.0f, 0.0f, 1.5f));
             m_blist.push_back(glm::vec3(0.0f, 0.0f, 1.5f));
             m_blist.push_back(glm::vec3(0.0f, 0.0f, 0.5f));
-            m_blist.push_back(glm::vec3(1.0f, 0.0f, 0.5f));
+            
             break;
         case 2: // middle
             break;
@@ -231,6 +232,7 @@ public:
 
     void UpdateCameraPosition(float deltaTime)
     {
+        //std::cout << "move" << std::endl;
         if (isCameraMoving)
         {
             // Update camera position along Bezier path
@@ -239,7 +241,7 @@ public:
             {
                 // Camera reached the end of the path
                 isCameraMoving = false;
-                cameraMovementTime = cameraMovementDuration;
+                cameraMovementTime = 0.0f;
             }
 
             // Calculate new camera position based on Bezier path and cameraMovementTime
@@ -264,7 +266,7 @@ private:
     std::vector<glm::vec3> m_blist; // point list for bezier
     bool isCameraMoving = false;
     float cameraMovementTime = 0.0f; // Time elapsed during camera movement
-    float cameraMovementDuration = 15.0f; // Total duration for camera movement (adjust as needed)
+    float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)
 
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);

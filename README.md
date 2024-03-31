@@ -8,6 +8,10 @@
 
 ### Animate Robot Arm
 
+### Animate Camera
+
+press R mouse to add points, then click "Start Camera Motion" to animate camera along the bezier line (once).
+
 ## Minimal features:
 
 - [ ] Multiple viewpoints. For example, a top view and a third-person camera that follows a character. The position and movement of the camera is up to you. You can also create a cutscene to add new viewpoints.
