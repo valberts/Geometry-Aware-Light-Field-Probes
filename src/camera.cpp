@@ -87,3 +87,13 @@ void Camera::updateInput()
         m_prevCursorPos = m_pWindow->getCursorPos();
     }
 }
+
+void Camera::setPos(glm::vec3 newPos)
+{
+    if (m_userInteraction) {
+        m_position = newPos;
+    }
+    else {
+        m_prevCursorPos = m_pWindow->getCursorPos();
+    }
+}
