@@ -79,7 +79,19 @@ public:
             ImGui::InputInt("This is an integer input", &dummyInteger); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
             ImGui::Text("Value is: %i", dummyInteger); // Use C printf formatting rules (%i is a signed integer)
             ImGui::Checkbox("Use material if no texture", &m_useMaterial);
+
+            //if (ImGui::Button("Draw Point"))
+            //    m_drawPoint = !m_drawPoint;
+
+            //// Draw the point if the button is clicked
+            //if (m_drawPoint) {
+            //    ImGui::GetBackgroundDrawList()->AddCircleFilled(ImVec2((float)m_mousePos.x, (float)m_mousePos.y), 5.0f, IM_COL32(255, 0, 0, 255));
+            //    m_drawPoint = !m_drawPoint;
+            //}
+
             ImGui::End();
+
+
 
             // Clear the screen
             glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
@@ -110,6 +122,24 @@ public:
                 mesh.draw(m_defaultShader);
             }
 
+            //draw points
+            if (m_blist.size() > 0) {
+                glEnable(GL_PROGRAM_POINT_SIZE);
+                glPointSize(5.0f);
+
+                // Create vertex buffer object
+                glGenBuffers(1, &m_pointVBO);
+                glBindBuffer(GL_ARRAY_BUFFER, m_pointVBO);
+                glBufferData(GL_ARRAY_BUFFER, m_blist.size() * sizeof(glm::vec3), m_blist.data(), GL_STATIC_DRAW);
+
+                //glEnableVertexAttribArray(0);
+                //glBindBuffer(GL_ARRAY_BUFFER, m_pointVBO);
+                //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+                //glDrawArrays(GL_POINTS, 0, m_blist.size());
+                //glDisableVertexAttribArray(0);
+            }
+            
+
             // Processes input and swaps the window buffer
             m_window.swapBuffers();
         }
@@ -134,6 +164,7 @@ public:
     // If the mouse is moved this function will be called with the x, y screen-coordinates of the mouse
     void onMouseMove(const glm::dvec2& cursorPos)
     {
+        m_mousePos = cursorPos;
         std::cout << "Mouse at position: " << cursorPos.x << " " << cursorPos.y << std::endl;
     }
 
@@ -142,6 +173,25 @@ public:
     // mods - Any modifier buttons pressed
     void onMouseClicked(int button, int mods)
     {
+        float x, y;
+        switch (button) {
+        case 0: // left
+            break;
+        case 1: // right
+            glm::ivec2 size = m_window.getWindowSize();
+            x = (2.0f * m_mousePos.x) / size.x - 1.0f;
+            y = 1.0f - (2.0f * m_mousePos.y) / size.y;
+            // Add new point to the vector
+            m_blist.push_back(glm::vec3(float(x), float(y), 0.0f));
+            // bind buffer
+            glBindBuffer(GL_ARRAY_BUFFER, m_pointVBO);
+            glBufferData(GL_ARRAY_BUFFER, m_blist.size() * sizeof(glm::vec3), m_blist.data(), GL_STATIC_DRAW);
+            break;
+        case 2: // middle
+            break;
+        default:
+            break;
+        }
         std::cout << "Pressed mouse button: " << button << std::endl;
     }
 
@@ -164,6 +214,10 @@ private:
     std::vector<GPUMesh> m_meshes;
     Texture m_texture;
     bool m_useMaterial { true };
+    //bool m_drawPoint{ false };
+    glm::dvec2 m_mousePos;
+    std::vector<glm::vec3> m_blist; // point list for bezier
+    GLuint m_pointVBO;
 
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
