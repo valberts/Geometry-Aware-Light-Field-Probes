@@ -23,13 +23,13 @@ DISABLE_WARNINGS_POP()
 #include <iostream>
 #include <vector>
 #include "camera.h"
+#include "managers.cpp"
 
 class Application {
 public:
     Application()
         : m_window("Final Project", glm::ivec2(1024, 1024), OpenGLVersion::GL45)
         , m_camera(&m_window, glm::vec3(-1.0f, 0.2f, -0.5f), glm::vec3(1.0f, 0.0f, 0.4f), 0.03f, 0.0035f) // setup camera with position, forward, move speed, and look speed
-        , m_texture("resources/checkerboard.png")
     {
         m_window.registerKeyCallback([this](int key, int scancode, int action, int mods) {
             if (action == GLFW_PRESS)
@@ -45,111 +45,137 @@ public:
                 onMouseReleased(button, mods);
         });
 
-        m_meshes = GPUMesh::loadMeshGPU("resources/dragon.obj");
+        setupShaders();
+        loadMeshes();
+        loadTextures();
+    }
 
+    void setupShaders() {
         try {
-            ShaderBuilder defaultBuilder;
-            defaultBuilder.addStage(GL_VERTEX_SHADER, "shaders/shader_vert.glsl");
-            defaultBuilder.addStage(GL_FRAGMENT_SHADER, "shaders/shader_frag.glsl");
-            m_defaultShader = defaultBuilder.build();
+            m_shaderManager->loadShader("default", {
+                {GL_VERTEX_SHADER, "shaders/default_vert.glsl"},
+                {GL_FRAGMENT_SHADER, "shaders/default_frag.glsl"}
+            });
 
-            ShaderBuilder shadowBuilder;
-            shadowBuilder.addStage(GL_VERTEX_SHADER, "shaders/shadow_vert.glsl");
-            m_shadowShader = shadowBuilder.build();
+            m_shaderManager->loadShader("shadow", {
+                {GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}
+            });
 
-            ShaderBuilder lightBuilder;
-            lightBuilder.addStage(GL_VERTEX_SHADER, "shaders/light_vertex.glsl");
-            lightBuilder.addStage(GL_FRAGMENT_SHADER, "shaders/light_frag.glsl");
-            m_lightShader = lightBuilder.build();
-
+            m_shaderManager->loadShader("light", {
+                {GL_VERTEX_SHADER, "shaders/light_vertex.glsl"},
+                {GL_FRAGMENT_SHADER, "shaders/light_frag.glsl"}
+            });
             // Any new shaders can be added below in similar fashion.
             // ==> Don't forget to reconfigure CMake when you do!
             //     Visual Studio: PROJECT => Generate Cache for ComputerGraphics
             //     VS Code: ctrl + shift + p => CMake: Configure => enter
             // ....
-        } catch (ShaderLoadingException e) {
+        }
+        catch (ShaderLoadingException e) {
             std::cerr << e.what() << std::endl;
         }
     }
 
+    void loadMeshes() {
+        m_meshManager->loadMesh("dragon", "resources/dragon.obj");
+        m_meshManager->loadMesh("cube", "resources/cube.obj");
+    }
+
+    void loadTextures() {
+        m_textureManager->loadTexture("checkerboard", "resources/checkerboard.png");
+        m_textureManager->loadTexture("cube", "resources/texture.png");
+    }
+
     void update()
     {
-        int dummyInteger = 0; // Initialized to 0
         while (!m_window.shouldClose()) {
             // This is your game loop
             // Put your real-time logic and rendering in here
-            m_window.updateInput();
-            m_camera.updateInput();
-
-            // Use ImGui for easy input/output of ints, floats, strings, etc...
-            ImGui::Begin("Window");
-            ImGui::InputInt("This is an integer input", &dummyInteger); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
-            ImGui::Text("Value is: %i", dummyInteger); // Use C printf formatting rules (%i is a signed integer)
-            ImGui::Checkbox("Use material if no texture", &m_useMaterial);
-            
-
-            if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
-            {
-                // Start camera motion
-                isCameraMoving = true;
-                cameraMovementTime = 0.0f;
-            }
-
-            if (isCameraMoving) {
-                UpdateCameraPosition(0.5f);
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-
-
-            ImGui::End();
-
-
-
-            // Clear the screen
-            glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            // ...
-            glEnable(GL_DEPTH_TEST);
-
-            const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
-            // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
-            // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
-            const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
-
-            for (GPUMesh& mesh : m_meshes) {
-                m_defaultShader.bind();
-                glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-                glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_modelMatrix));
-                glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
-                if (mesh.hasTextureCoords()) {
-                    m_texture.bind(GL_TEXTURE0);
-                    glUniform1i(3, 0);
-                    glUniform1i(4, GL_TRUE);
-                    glUniform1i(5, GL_FALSE);
-                } else {
-                    glUniform1i(4, GL_FALSE);
-                    glUniform1i(5, m_useMaterial);
-                }
-                mesh.draw(m_defaultShader);
-            }
-
-            // Render points ----
-            m_lightShader.bind();
-            for (int i = 0; i < m_blist.size(); i++) {
-                const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_blist[i], 1.0f);
-                const glm::vec3 color{ 1, 0, 0 };
-
-                glPointSize(15.0f);
-                glUniform4fv(0, 1, glm::value_ptr(screenPos));
-                glUniform3fv(1, 1, glm::value_ptr(color));
-                glDrawArrays(GL_POINTS, 0, 1);
-            }
-            // render points -----
-
-            // Processes input and swaps the window buffer
-            m_window.swapBuffers();
+            processInput();
+            renderScene();
         }
+    }
+
+    void processInput() {
+        m_window.updateInput();
+        m_camera.updateInput();
+
+        // Use ImGui for easy input/output of ints, floats, strings, etc...
+        ImGui::Begin("Window");
+        ImGui::InputInt("Shading mode", &m_shadingMode); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
+        ImGui::Text("Value is: %i", m_shadingMode); // Use C printf formatting rules (%i is a signed integer)
+        ImGui::Checkbox("Use material if no texture", &m_useMaterial);
+
+
+        if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
+        {
+            // Start camera motion
+            isCameraMoving = true;
+            cameraMovementTime = 0.0f;
+        }
+
+        if (isCameraMoving) {
+            UpdateCameraPosition(0.5f);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+
+        ImGui::End();
+    }
+
+    void renderScene() {
+        // Clear the screen
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // ...
+        glEnable(GL_DEPTH_TEST);
+
+        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
+        // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
+        // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
+        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
+
+        auto& meshes = m_meshManager->getMeshes("cube");
+        for (auto& mesh : meshes) {
+
+            Shader& defaultShader = m_shaderManager->getShader("default");
+            defaultShader.bind();
+            glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
+            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_modelMatrix));
+            glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
+            if (mesh.hasTextureCoords()) {
+                Texture* texture = m_textureManager->getTexture("cube");
+                texture->bind(GL_TEXTURE0);
+                glUniform1i(3, 0);
+                glUniform1i(4, GL_TRUE);
+                glUniform1i(5, GL_FALSE);
+                glUniform1i(6, m_shadingMode);
+            }
+            else {
+                glUniform1i(4, GL_FALSE);
+                glUniform1i(5, m_useMaterial);
+                glUniform1i(6, m_shadingMode);
+            }
+            mesh.draw(defaultShader);
+        }
+
+        // Render points ----
+        Shader& lightShader = m_shaderManager->getShader("light");
+        lightShader.bind();
+        for (int i = 0; i < m_blist.size(); i++) {
+            const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_blist[i], 1.0f);
+            const glm::vec3 color{ 1, 0, 0 };
+
+            glPointSize(15.0f);
+            glUniform4fv(0, 1, glm::value_ptr(screenPos));
+            glUniform3fv(1, 1, glm::value_ptr(color));
+            glDrawArrays(GL_POINTS, 0, 1);
+        }
+        // render points -----
+
+        // Processes input and swaps the window buffer
+        m_window.swapBuffers();
     }
 
     // In here you can handle key presses
@@ -253,17 +279,18 @@ private:
     Window m_window;
     Camera m_camera;
 
-    // Shader for default rendering and for depth rendering
-    Shader m_defaultShader;
-    Shader m_shadowShader;
-    Shader m_lightShader;
+    // Manager classes
+    std::unique_ptr<MeshManager> m_meshManager = std::make_unique<MeshManager>();
+    std::unique_ptr<ShaderManager> m_shaderManager = std::make_unique<ShaderManager>();
+    std::unique_ptr<TextureManager> m_textureManager = std::make_unique<TextureManager>();
 
-    std::vector<GPUMesh> m_meshes;
-    Texture m_texture;
     bool m_useMaterial { true };
-    //bool m_drawPoint{ false };
+    int m_shadingMode{ 0 }; // how to shade the model, 0 = diffuse
     glm::dvec2 m_mousePos;
+
+    // Bezier Variables
     std::vector<glm::vec3> m_blist; // point list for bezier
+    //bool m_drawPoint{ false };
     bool isCameraMoving = false;
     float cameraMovementTime = 0.0f; // Time elapsed during camera movement
     float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)

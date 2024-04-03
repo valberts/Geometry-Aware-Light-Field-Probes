@@ -111,7 +111,7 @@ std::vector<Mesh> loadMesh(const std::filesystem::path& file, bool centerAndNorm
                     if (auto iter = vertexCache.find(tinyObjIndex.vertex_index); iter != std::end(vertexCache)) {
                         // Already visited this vertex? Reuse it!
                         triangle[j] = iter->second;
-                    } else {                      
+                    } else {
                         // New vertex? Create it and store it in the vertex cache.
                         vertexCache[tinyObjIndex.vertex_index] = triangle[j] = mesh.vertices.size();
                         mesh.vertices.push_back(vertex);
@@ -191,7 +191,7 @@ Mesh mergeMeshes(std::span<const Mesh> meshes)
     return out;
 }
 
-void  meshFlipX(Mesh& mesh)
+void meshFlipX(Mesh& mesh)
 {
     for (auto& v : mesh.vertices) {
         v.position.x = -v.position.x;
@@ -199,7 +199,7 @@ void  meshFlipX(Mesh& mesh)
     }
 }
 
-void  meshFlipY(Mesh& mesh)
+void meshFlipY(Mesh& mesh)
 {
     for (auto& v : mesh.vertices) {
         v.position.y = -v.position.y;
