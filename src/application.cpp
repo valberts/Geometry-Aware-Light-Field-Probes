@@ -79,11 +79,13 @@ public:
     void loadMeshes() {
         m_meshManager->loadMesh("dragon", "resources/dragon.obj");
         m_meshManager->loadMesh("cube", "resources/cube.obj");
+        m_meshManager->loadMesh("floor", "resources/floor.obj");
     }
 
     void loadTextures() {
         m_textureManager->loadTexture("checkerboard", "resources/checkerboard.png");
         m_textureManager->loadTexture("cube", "resources/texture.png");
+        m_textureManager->loadTexture("floor", "resources/floor.png");
     }
 
     void update()
@@ -136,29 +138,8 @@ public:
         // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
         const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
 
-        auto& meshes = m_meshManager->getMeshes("cube");
-        for (auto& mesh : meshes) {
-
-            Shader& defaultShader = m_shaderManager->getShader("default");
-            defaultShader.bind();
-            glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_modelMatrix));
-            glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
-            if (mesh.hasTextureCoords()) {
-                Texture* texture = m_textureManager->getTexture("cube");
-                texture->bind(GL_TEXTURE0);
-                glUniform1i(3, 0);
-                glUniform1i(4, GL_TRUE);
-                glUniform1i(5, GL_FALSE);
-                glUniform1i(6, m_shadingMode);
-            }
-            else {
-                glUniform1i(4, GL_FALSE);
-                glUniform1i(5, m_useMaterial);
-                glUniform1i(6, m_shadingMode);
-            }
-            mesh.draw(defaultShader);
-        }
+        renderMesh("default", "dragon", mvpMatrix, m_modelMatrix, normalModelMatrix);
+        renderMesh("default", "floor", mvpMatrix, m_modelMatrix, normalModelMatrix, "floor");
 
         // Render points ----
         Shader& lightShader = m_shaderManager->getShader("light");
@@ -177,6 +158,50 @@ public:
         // Processes input and swaps the window buffer
         m_window.swapBuffers();
     }
+
+    /**
+    * Renders a mesh with specified shader, transformation matrices, and an optional texture.
+    *
+    * @param shaderName The name of the shader to use for rendering.
+    * @param meshName The name of the mesh to render.
+    * @param mvpMatrix The Model-View-Projection matrix for transforming the mesh.
+    * @param m_modelMatrix The Model matrix for transforming the mesh.
+    * @param normalModelMatrix The Normal matrix for transforming normal vectors.
+    * @param textureName (Optional) The name of the texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
+    */
+    void renderMesh(const std::string& shaderName,
+        const std::string& meshName,
+        const glm::mat4& mvpMatrix,
+        const glm::mat4& modelMatrix,
+        const glm::mat3& normalModelMatrix,
+        const std::optional<std::string>& textureName = std::nullopt)
+    {
+        auto& meshes = m_meshManager->getMeshes(meshName);
+        for (auto& mesh : meshes) {
+            Shader& shader = m_shaderManager->getShader(shaderName);
+            shader.bind();
+
+            glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
+            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+            glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
+
+            if (mesh.hasTextureCoords() && textureName.has_value()) {
+                Texture* texture = m_textureManager->getTexture(*textureName);
+                texture->bind(GL_TEXTURE0);
+                glUniform1i(3, 0); 
+                glUniform1i(4, GL_TRUE); 
+                glUniform1i(5, GL_FALSE); 
+                glUniform1i(6, m_shadingMode); 
+            }
+            else {
+                glUniform1i(4, GL_FALSE);
+                glUniform1i(5, m_useMaterial);
+                glUniform1i(6, m_shadingMode);
+            }
+            mesh.draw(shader);
+        }
+    }
+
 
     // In here you can handle key presses
     // key - Integer that corresponds to numbers in https://www.glfw.org/docs/latest/group__keys.html
