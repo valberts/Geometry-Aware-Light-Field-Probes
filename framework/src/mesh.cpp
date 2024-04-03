@@ -106,16 +106,14 @@ std::vector<Mesh> loadMesh(const std::filesystem::path& file, bool centerAndNorm
                     else
                         vertex.normal = geometricNormal;
                     if (tinyObjIndex.texcoord_index != -1 && !inAttrib.texcoords.empty())
-                        vertex.texCoord = glm::vec2(inAttrib.texcoords[2 * tinyObjIndex.texcoord_index + 0], inAttrib.texcoords[2 * tinyObjIndex.texcoord_index + 1]);
+                        vertex.texCoord = glm::vec2(
+                            inAttrib.texcoords[2 * tinyObjIndex.texcoord_index + 0], 
+                            1.0f - inAttrib.texcoords[2 * tinyObjIndex.texcoord_index + 1]); // flipped second coordinate to fix UV problem
 
-                    if (auto iter = vertexCache.find(tinyObjIndex.vertex_index); iter != std::end(vertexCache)) {
-                        // Already visited this vertex? Reuse it!
-                        triangle[j] = iter->second;
-                    } else {
-                        // New vertex? Create it and store it in the vertex cache.
-                        vertexCache[tinyObjIndex.vertex_index] = triangle[j] = mesh.vertices.size();
-                        mesh.vertices.push_back(vertex);
-                    }
+                    // We are not checking if the vertex is already found in the vertex cache or not
+                    // Otherwise there is issue with texture mapping where vertex is same but texture coord and normal is different
+                    vertexCache[tinyObjIndex.vertex_index] = triangle[j] = mesh.vertices.size();
+                    mesh.vertices.push_back(vertex);
                 }
                 mesh.triangles.push_back(triangle);
             }
