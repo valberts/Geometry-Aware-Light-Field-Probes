@@ -1,4 +1,4 @@
-//#include "Image.h"
+// #include "Image.h"
 #include "mesh.h"
 #include "texture.h"
 // Always include window first (because it includes glfw, which includes GL which needs to be included AFTER glew).
@@ -22,67 +22,67 @@ DISABLE_WARNINGS_POP()
 #include <functional>
 #include <iostream>
 #include <vector>
+#include <random>
 #include "camera.h"
 #include "managers.cpp"
 
-class Application {
+class Application
+{
 public:
     Application()
-        : m_window("Final Project", glm::ivec2(1024, 1024), OpenGLVersion::GL45)
-        , m_camera(&m_window, glm::vec3(-1.0f, 0.2f, -0.5f), glm::vec3(1.0f, 0.0f, 0.4f), 0.03f, 0.0035f) // setup camera with position, forward, move speed, and look speed
+        : m_window("Final Project", glm::ivec2(1024, 1024), OpenGLVersion::GL45), m_camera(&m_window, glm::vec3(-1.0f, 0.2f, -0.5f), glm::vec3(1.0f, 0.0f, 0.4f), 0.03f, 0.0035f) // setup camera with position, forward, move speed, and look speed
     {
-        m_window.registerKeyCallback([this](int key, int scancode, int action, int mods) {
+        m_window.registerKeyCallback([this](int key, int scancode, int action, int mods)
+                                     {
             if (action == GLFW_PRESS)
                 onKeyPressed(key, mods);
             else if (action == GLFW_RELEASE)
-                onKeyReleased(key, mods);
-        });
+                onKeyReleased(key, mods); });
         m_window.registerMouseMoveCallback(std::bind(&Application::onMouseMove, this, std::placeholders::_1));
-        m_window.registerMouseButtonCallback([this](int button, int action, int mods) {
+        m_window.registerMouseButtonCallback([this](int button, int action, int mods)
+                                             {
             if (action == GLFW_PRESS)
                 onMouseClicked(button, mods);
             else if (action == GLFW_RELEASE)
-                onMouseReleased(button, mods);
-        });
+                onMouseReleased(button, mods); });
 
         setupShaders();
         loadMeshes();
         loadTextures();
     }
 
-    void setupShaders() {
-        try {
-            m_shaderManager->loadShader("default", {
-                {GL_VERTEX_SHADER, "shaders/default_vert.glsl"},
-                {GL_FRAGMENT_SHADER, "shaders/default_frag.glsl"}
-            });
+    void setupShaders()
+    {
+        try
+        {
+            m_shaderManager->loadShader("default", {{GL_VERTEX_SHADER, "shaders/default_vert.glsl"},
+                                                    {GL_FRAGMENT_SHADER, "shaders/default_frag.glsl"}});
 
-            m_shaderManager->loadShader("shadow", {
-                {GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}
-            });
+            m_shaderManager->loadShader("shadow", {{GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}});
 
-            m_shaderManager->loadShader("light", {
-                {GL_VERTEX_SHADER, "shaders/light_vertex.glsl"},
-                {GL_FRAGMENT_SHADER, "shaders/light_frag.glsl"}
-            });
+            m_shaderManager->loadShader("light", {{GL_VERTEX_SHADER, "shaders/light_vertex.glsl"},
+                                                  {GL_FRAGMENT_SHADER, "shaders/light_frag.glsl"}});
             // Any new shaders can be added below in similar fashion.
             // ==> Don't forget to reconfigure CMake when you do!
             //     Visual Studio: PROJECT => Generate Cache for ComputerGraphics
             //     VS Code: ctrl + shift + p => CMake: Configure => enter
             // ....
         }
-        catch (ShaderLoadingException e) {
+        catch (ShaderLoadingException e)
+        {
             std::cerr << e.what() << std::endl;
         }
     }
 
-    void loadMeshes() {
+    void loadMeshes()
+    {
         m_meshManager->loadMesh("dragon", "resources/dragon.obj");
         m_meshManager->loadMesh("cube", "resources/cube.obj");
         m_meshManager->loadMesh("floor", "resources/floor.obj");
     }
 
-    void loadTextures() {
+    void loadTextures()
+    {
         m_textureManager->loadTexture("checkerboard", "resources/checkerboard.png");
         m_textureManager->loadTexture("cube", "resources/texture.png");
         m_textureManager->loadTexture("floor", "resources/floor.png");
@@ -90,7 +90,8 @@ public:
 
     void update()
     {
-        while (!m_window.shouldClose()) {
+        while (!m_window.shouldClose())
+        {
             // This is your game loop
             // Put your real-time logic and rendering in here
             processInput();
@@ -98,16 +99,18 @@ public:
         }
     }
 
-    void processInput() {
+    void processInput()
+    {
         m_window.updateInput();
         m_camera.updateInput();
 
         // Use ImGui for easy input/output of ints, floats, strings, etc...
         ImGui::Begin("Window");
         ImGui::InputInt("Shading mode", &m_shadingMode); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
-        ImGui::Text("Value is: %i", m_shadingMode); // Use C printf formatting rules (%i is a signed integer)
+        ImGui::Text("Value is: %i", m_shadingMode);      // Use C printf formatting rules (%i is a signed integer)
         ImGui::Checkbox("Use material if no texture", &m_useMaterial);
-
+        ImGui::InputInt("Create a snake of length: %i", &m_numBodySegments);
+        ImGui::Checkbox("Animate Snake", &animateSnake);
 
         if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
         {
@@ -116,16 +119,17 @@ public:
             cameraMovementTime = 0.0f;
         }
 
-        if (isCameraMoving) {
+        if (isCameraMoving)
+        {
             UpdateCameraPosition(0.5f);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
-
         ImGui::End();
     }
 
-    void renderScene() {
+    void renderScene()
+    {
         // Clear the screen
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -142,11 +146,12 @@ public:
         const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
 
         // Render points ----
-        Shader& lightShader = m_shaderManager->getShader("light");
+        Shader &lightShader = m_shaderManager->getShader("light");
         lightShader.bind();
-        for (int i = 0; i < m_blist.size(); i++) {
+        for (int i = 0; i < m_blist.size(); i++)
+        {
             const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_blist[i], 1.0f);
-            const glm::vec3 color{ 1, 0, 0 };
+            const glm::vec3 color{1, 0, 0};
 
             glPointSize(15.0f);
             glUniform4fv(0, 1, glm::value_ptr(screenPos));
@@ -155,45 +160,106 @@ public:
         }
         // render points -----
 
+        // Render snake (hierarchical box transform)
+        // default length = 6
+        if (animateSnake)
+        {
+            if (m_move_right)
+                m_snake_pos.x += 0.05f;
+            if (m_move_left)
+                m_snake_pos.x -= 0.05f;
+            if (m_move_down)
+                m_snake_pos.z += 0.05f;
+            if (m_move_up)
+                m_snake_pos.z -= 0.05f;
+
+            glm::vec3 headScale(0.08f, 0.1f, 0.2f);
+            glm::vec3 headTranslation = m_snake_pos;
+            glm::mat4 trans_axis_to_side_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, -1.0));
+            glm::mat4 trans_axis_to_side_back_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, 1.0));
+
+            glm::vec3 headToBody(0.0f, 0.0f, 2.0f);
+            glm::mat4 trans_headToBody = glm::translate(glm::mat4(1.0f), headToBody);
+
+            glm::mat4 headScaleMatrix = glm::scale(glm::mat4(1.0f), headScale);
+            glm::mat4 headTranslationMatrix = glm::translate(glm::mat4(1.0f), headTranslation);
+            if (m_head_rotationAngle >= 45.0f || m_head_rotationAngle <= -45.0f)
+            {
+                m_head_rotationDirection *= -1;
+            }
+            m_head_rotationAngle += float(m_head_rotationDirection);
+            // std::cout << m_head_rotationAngle << std::endl;
+            glm::mat4 rotz_1 = glm::rotate(glm::mat4(1.0f), glm::radians(m_head_rotationAngle), glm::vec3(0, 1, 0));
+            glm::mat4 headModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
+
+            const glm::mat4 headMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * headModelMatrix;
+            const glm::mat3 headScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(headModelMatrix));
+            renderMesh("default", "cube", headModelMatrix);
+
+            glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
+            int rot_dir = -1;
+
+            for (int i = 0; i < m_numBodySegments; ++i)
+            {
+                // add random angle to body rotation
+                /*std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> dist(0.5f, 2.0f);
+                float randomNumber = dist(gen);*/
+                glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(rot_dir * m_head_rotationAngle * 1.2f), glm::vec3(0, 1, 0));
+                glm::mat4 bodyModelMatrix = lastModelMatrix * trans_headToBody * rotz_2;
+                lastModelMatrix = bodyModelMatrix;
+                rot_dir *= -1;
+
+                // Render the current body segment
+                const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
+                const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
+                renderMesh("default", "cube", bodyModelMatrix);
+            }
+        }
+
         // Processes input and swaps the window buffer
         m_window.swapBuffers();
     }
 
     /**
-    * Renders a mesh with specified shader, transformation matrices, and an optional texture.
-    *
-    * @param shaderName The name of the shader to use for rendering.
-    * @param meshName The name of the mesh to render.
-    * @param modelMatrix The Model matrix for transforming the mesh.
-    * @param textureName (Optional) The name of the texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
-    */
-    void renderMesh(const std::string& shaderName,
-        const std::string& meshName,
-        const glm::mat4& modelMatrix,
-        const std::optional<std::string>& textureName = std::nullopt)
+     * Renders a mesh with specified shader, transformation matrices, and an optional texture.
+     *
+     * @param shaderName The name of the shader to use for rendering.
+     * @param meshName The name of the mesh to render.
+     * @param modelMatrix The Model matrix for transforming the mesh.
+     * @param textureName (Optional) The name of the texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
+     */
+    void renderMesh(const std::string &shaderName,
+                    const std::string &meshName,
+                    const glm::mat4 &modelMatrix,
+                    const std::optional<std::string> &textureName = std::nullopt)
     {
-        auto& meshes = m_meshManager->getMeshes(meshName);
+        auto &meshes = m_meshManager->getMeshes(meshName);
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
         // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
         const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
 
-        for (auto& mesh : meshes) {
-            Shader& shader = m_shaderManager->getShader(shaderName);
+        for (auto &mesh : meshes)
+        {
+            Shader &shader = m_shaderManager->getShader(shaderName);
             shader.bind();
 
             glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
             glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
             glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
 
-            if (mesh.hasTextureCoords() && textureName.has_value()) {
-                Texture* texture = m_textureManager->getTexture(*textureName);
+            if (mesh.hasTextureCoords() && textureName.has_value())
+            {
+                Texture *texture = m_textureManager->getTexture(*textureName);
                 texture->bind(GL_TEXTURE0);
-                glUniform1i(3, 0); 
-                glUniform1i(4, GL_TRUE); 
-                glUniform1i(5, GL_FALSE); 
-                glUniform1i(6, m_shadingMode); 
+                glUniform1i(3, 0);
+                glUniform1i(4, GL_TRUE);
+                glUniform1i(5, GL_FALSE);
+                glUniform1i(6, m_shadingMode);
             }
-            else {
+            else
+            {
                 glUniform1i(4, GL_FALSE);
                 glUniform1i(5, m_useMaterial);
                 glUniform1i(6, m_shadingMode);
@@ -202,28 +268,43 @@ public:
         }
     }
 
-
     // In here you can handle key presses
     // key - Integer that corresponds to numbers in https://www.glfw.org/docs/latest/group__keys.html
     // mods - Any modifier keys pressed, like shift or control
     void onKeyPressed(int key, int mods)
     {
-        switch (key) {
-            case GLFW_KEY_W: {
-                //const glm::vec3 right = glm::normalize(glm::cross(m_camera.forward(), m_camera.up()));
-                //glm::translate(m_modelMatrix, right);
-                //m_modelMatrix *= glm::vec4(1.1, 1.1, 1.1, 1.0);
-                //m_modelMatrix -= 0.03f * right;
-                break;
-            }
-            case GLFW_KEY_ESCAPE: {
-                    m_window.close();
-                    exit(0);
-                    break;
-            }
-                
-        } 
-        std::cout << "Key pressed: " << key << std::endl;
+        switch (key)
+        {
+        // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
+        case 262:
+            m_move_right = true;
+            break;
+        case 263:
+            m_move_left = true;
+            break;
+        case 264:
+            m_move_down = true;
+            break;
+        case 265:
+            m_move_up = true;
+            break;
+        case GLFW_KEY_W:
+        {
+            // const glm::vec3 right = glm::normalize(glm::cross(m_camera.forward(), m_camera.up()));
+            // glm::translate(m_modelMatrix, right);
+            // m_modelMatrix *= glm::vec4(1.1, 1.1, 1.1, 1.0);
+            // m_modelMatrix -= 0.03f * right;
+            break;
+        }
+        case GLFW_KEY_ESCAPE:
+        {
+            m_window.close();
+            exit(0);
+            break;
+        }
+        default:
+            std::cout << "Key pressed: " << key << std::endl;
+        }
     }
 
     // In here you can handle key releases
@@ -231,11 +312,28 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyReleased(int key, int mods)
     {
-        std::cout << "Key released: " << key << std::endl;
+        switch (key)
+        {
+            // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
+        case 262:
+            m_move_right = false;
+            break;
+        case 263:
+            m_move_left = false;
+            break;
+        case 264:
+            m_move_down = false;
+            break;
+        case 265:
+            m_move_up = false;
+            break;
+        default:
+            std::cout << "Key released: " << key << std::endl;
+        }
     }
 
     // If the mouse is moved this function will be called with the x, y screen-coordinates of the mouse
-    void onMouseMove(const glm::dvec2& cursorPos)
+    void onMouseMove(const glm::dvec2 &cursorPos)
     {
         m_mousePos = cursorPos;
         std::cout << "Mouse at position: " << cursorPos.x << " " << cursorPos.y << std::endl;
@@ -247,17 +345,18 @@ public:
     void onMouseClicked(int button, int mods)
     {
         float x, y;
-        switch (button) {
+        switch (button)
+        {
         case 0: // left
             break;
         case 1: // right
             /*glm::ivec2 size = m_window.getWindowSize();
             x = (2.0f * m_mousePos.x) / size.x - 1.0f;
             y = 1.0f - (2.0f * m_mousePos.y) / size.y;*/
-            //x = 1.0f - (2.0f * m_mousePos.x) / size.x;
-            //y = (2.0f * m_mousePos.y) / size.y - 1.0f;
-            //m_blist.push_back(glm::vec3(float(x), float(y), 0.0f)); // TODO: set z
-            
+            // x = 1.0f - (2.0f * m_mousePos.x) / size.x;
+            // y = (2.0f * m_mousePos.y) / size.y - 1.0f;
+            // m_blist.push_back(glm::vec3(float(x), float(y), 0.0f)); // TODO: set z
+
             // predefined bline control points
             m_blist.push_back(glm::vec3(-1.0f, 0.0f, -0.5f));
             m_blist.push_back(glm::vec3(-1.0f, 0.0f, -1.5f));
@@ -292,19 +391,23 @@ public:
         return start + ((end - start) * t);
     }
 
-    glm::vec3 CalculateBezierPoint(float i, int s) {
+    glm::vec3 CalculateBezierPoint(float i, int s)
+    {
         glm::vec3 posA, posB, posC;
-        if (s == 1) {
+        if (s == 1)
+        {
             posA = getPt(m_blist[0], m_blist[1], i);
             posB = getPt(m_blist[1], m_blist[2], i);
             posC = getPt(m_blist[2], m_blist[3], i);
         }
-        else if (s == 2) {
+        else if (s == 2)
+        {
             posA = getPt(m_blist[3], m_blist[4], i);
             posB = getPt(m_blist[4], m_blist[5], i);
             posC = getPt(m_blist[5], m_blist[6], i);
         }
-        else {
+        else
+        {
             posA = getPt(m_blist[6], m_blist[7], i);
             posB = getPt(m_blist[7], m_blist[8], i);
             posC = getPt(m_blist[8], m_blist[9], i);
@@ -318,7 +421,7 @@ public:
 
     void UpdateCameraPosition(float deltaTime)
     {
-        //std::cout << "move" << std::endl;
+        // std::cout << "move" << std::endl;
         if (isCameraMoving)
         {
             // Update camera position along Bezier path
@@ -335,7 +438,7 @@ public:
             float timePieceDuration = cameraMovementDuration / 3;
             int cameraPosition = int(std::min((cameraMovementTime / timePieceDuration) + 1, 3.0f));
             float p_local = (cameraMovementTime - (float(cameraPosition - 1)) * timePieceDuration) / timePieceDuration;
-            m_camera.setPos(CalculateBezierPoint(p_local , cameraPosition));
+            m_camera.setPos(CalculateBezierPoint(p_local, cameraPosition));
         }
     }
 
@@ -348,21 +451,33 @@ private:
     std::unique_ptr<ShaderManager> m_shaderManager = std::make_unique<ShaderManager>();
     std::unique_ptr<TextureManager> m_textureManager = std::make_unique<TextureManager>();
 
-    bool m_useMaterial { true };
-    int m_shadingMode{ 0 }; // how to shade the model, 0 = diffuse
+    bool m_useMaterial{true};
+    int m_shadingMode{0}; // how to shade the model, 0 = diffuse
     glm::dvec2 m_mousePos;
 
     // Bezier Variables
     std::vector<glm::vec3> m_blist; // point list for bezier
-    //bool m_drawPoint{ false };
+    // bool m_drawPoint{ false };
     bool isCameraMoving = false;
-    float cameraMovementTime = 0.0f; // Time elapsed during camera movement
+    float cameraMovementTime = 0.0f;      // Time elapsed during camera movement
     float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)
+    bool animateSnake{false};             // only draw snake when true
+    float animationTime = 0.0f;           // Animation time
+    float animationSpeed = 1.0f;          // Speed of animation
+    int m_numBodySegments{5};             // num of body segements
+    int m_head_rotationDirection = 1;
+    float m_head_rotationAngle = 0.0f;
+    glm::vec3 m_snake_pos = glm::vec3(-1.5f, 0.0f, 0.0f);
+    bool m_move_right = false;
+    bool m_move_left = false;
+    bool m_move_down = false;
+    bool m_move_up = false;
+
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
-    //glm::mat4 m_viewMatrix = glm::lookAt(glm::vec3(-1, 1, -1), glm::vec3(0), glm::vec3(0, 1, 0));
+    // glm::mat4 m_viewMatrix = glm::lookAt(glm::vec3(-1, 1, -1), glm::vec3(0), glm::vec3(0, 1, 0));
     glm::mat4 m_viewMatrix = glm::lookAt(m_camera.cameraPos(), glm::vec3(0), glm::vec3(0, 1, 0));
-    glm::mat4 m_modelMatrix { 1.0f };
+    glm::mat4 m_modelMatrix{1.0f};
 };
 
 int main()
