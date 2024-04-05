@@ -136,13 +136,13 @@ public:
         // ...
         glEnable(GL_DEPTH_TEST);
 
+        renderMesh("default", "dragon", m_modelMatrix);
+        renderMesh("default", "floor", m_modelMatrix, "floor");
+
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
         // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
         // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
         const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
-
-        renderMesh("default", "dragon", mvpMatrix, m_modelMatrix, normalModelMatrix);
-        renderMesh("default", "floor", mvpMatrix, m_modelMatrix, normalModelMatrix, "floor");
 
         // Render points ----
         Shader& lightShader = m_shaderManager->getShader("light");
@@ -220,19 +220,19 @@ public:
     *
     * @param shaderName The name of the shader to use for rendering.
     * @param meshName The name of the mesh to render.
-    * @param mvpMatrix The Model-View-Projection matrix for transforming the mesh.
-    * @param m_modelMatrix The Model matrix for transforming the mesh.
-    * @param normalModelMatrix The Normal matrix for transforming normal vectors.
+    * @param modelMatrix The Model matrix for transforming the mesh.
     * @param textureName (Optional) The name of the texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
     */
     void renderMesh(const std::string& shaderName,
         const std::string& meshName,
-        const glm::mat4& mvpMatrix,
         const glm::mat4& modelMatrix,
-        const glm::mat3& normalModelMatrix,
         const std::optional<std::string>& textureName = std::nullopt)
     {
         auto& meshes = m_meshManager->getMeshes(meshName);
+        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
+        // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
+        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
+
         for (auto& mesh : meshes) {
             Shader& shader = m_shaderManager->getShader(shaderName);
             shader.bind();
