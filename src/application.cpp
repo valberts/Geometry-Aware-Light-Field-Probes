@@ -8,6 +8,7 @@ DISABLE_WARNINGS_PUSH()
 #include <glad/glad.h>
 // Include glad before glfw3
 #include <GLFW/glfw3.h>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -25,6 +26,7 @@ DISABLE_WARNINGS_POP()
 #include <random>
 #include "camera.h"
 #include "managers.cpp"
+#include "player.cpp"
 
 class Application
 {
@@ -95,19 +97,23 @@ public:
             // This is your game loop
             // Put your real-time logic and rendering in here
             processInput();
+            updateScene();
             renderScene();
         }
     }
 
     void processInput()
     {
+        if (m_cameraMode == 0) {
+            m_camera.updateInput();
+        }
         m_window.updateInput();
-        m_camera.updateInput();
+
 
         // Use ImGui for easy input/output of ints, floats, strings, etc...
         ImGui::Begin("Window");
         ImGui::InputInt("Shading mode", &m_shadingMode); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
-        ImGui::Text("Value is: %i", m_shadingMode);      // Use C printf formatting rules (%i is a signed integer)
+        ImGui::InputInt("Camera mode", &m_cameraMode);
         ImGui::Checkbox("Use material if no texture", &m_useMaterial);
         ImGui::InputInt("Create a snake of length: %i", &m_numBodySegments);
         ImGui::Checkbox("Animate Snake", &animateSnake);
@@ -128,6 +134,36 @@ public:
         ImGui::End();
     }
 
+    void updateScene() {
+
+        // Move the player
+        const float playerSpeed = 0.1f;
+        if (glm::length(m_player.getDirection()) > 0.0f) { // if there's no movement, don't move
+            m_player.setPosition(m_player.getPosition() + glm::normalize(m_player.getDirection()) * m_player.getSpeed()); // normalize movement vector so diagonal isn't faster
+            m_player.setMatrix(glm::translate(glm::mat4(1.0f), m_player.getPosition()));
+        }
+
+        if (m_cameraMode == 0 && m_previousCameraMode != 0) { // reset to freecam parameters
+            m_player.setDirection(glm::vec3(0.0f, 0.0f, 0.0f)); // reset player direction because player input isnt updated in this camera mode
+            m_camera.setPosition(glm::vec3(-1.0f, 0.2f, -0.5f));
+            m_camera.setForward(glm::vec3(1.0f, 0.0f, 0.4f));
+            m_camera.setUp(glm::vec3(0, 1, 0));
+        } else if (m_cameraMode == 1) { // set the camera in top down mode
+            glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 5, 0);
+            m_camera.setPosition(cameraPosition);
+            m_camera.setForward(glm::normalize(m_player.getPosition() - cameraPosition));
+            m_camera.setUp(glm::vec3(0, 0, -1));
+        }
+        else if (m_cameraMode == 2) { // set the camera in 3rd person mode
+            glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 2, 2);
+            m_camera.setPosition(cameraPosition);
+            m_camera.setForward(glm::normalize(m_player.getPosition() - cameraPosition));
+            m_camera.setUp(glm::vec3(0, 1, 0));
+        }
+
+        m_previousCameraMode = m_cameraMode;
+    }
+
     void renderScene()
     {
         // Clear the screen
@@ -137,7 +173,7 @@ public:
         // ...
         glEnable(GL_DEPTH_TEST);
 
-        renderMesh("default", "dragon", m_modelMatrix);
+        renderMesh("default", "dragon", m_player.getMatrix());
         renderMesh("default", "floor", glm::mat4(1.0f), "floor");
 
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
@@ -273,6 +309,24 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyPressed(int key, int mods)
     {
+        if (m_cameraMode != 0) {
+            glm::vec3 playerDirection = m_player.getDirection();
+            switch (key) {
+            case GLFW_KEY_W:
+                m_player.setDirection(playerDirection + glm::vec3(0.0f, 0.0f, -1.0f)); // Move forward
+                break;
+            case GLFW_KEY_S:
+                m_player.setDirection(playerDirection + glm::vec3(0.0f, 0.0f, 1.0f)); // Move backward
+                break;
+            case GLFW_KEY_A:
+                m_player.setDirection(playerDirection + glm::vec3(-1.0f, 0.0f, 0.0f)); // Move left
+                break;
+            case GLFW_KEY_D:
+                m_player.setDirection(playerDirection + glm::vec3(1.0f, 0.0f, 0.0f)); // Move right
+                break;
+            }
+        }
+
         switch (key)
         {
         // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
@@ -288,22 +342,13 @@ public:
         case 265:
             m_move_up = true;
             break;
-        case GLFW_KEY_W:
-        {
-            // const glm::vec3 right = glm::normalize(glm::cross(m_camera.forward(), m_camera.up()));
-            // glm::translate(m_modelMatrix, right);
-            // m_modelMatrix *= glm::vec4(1.1, 1.1, 1.1, 1.0);
-            // m_modelMatrix -= 0.03f * right;
-            break;
-        }
         case GLFW_KEY_ESCAPE:
-        {
             m_window.close();
             exit(0);
             break;
-        }
         default:
             std::cout << "Key pressed: " << key << std::endl;
+            break;
         }
     }
 
@@ -312,6 +357,23 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyReleased(int key, int mods)
     {
+        if (m_cameraMode != 0) {
+            glm::vec3 playerDirection = m_player.getDirection();
+            switch (key) {
+                case GLFW_KEY_W:
+                    m_player.setDirection(playerDirection - glm::vec3(0.0f, 0.0f, -1.0f)); // Stop moving forward
+                    break;
+                case GLFW_KEY_S:
+                    m_player.setDirection(playerDirection - glm::vec3(0.0f, 0.0f, 1.0f)); // Stop moving backward
+                    break;
+                case GLFW_KEY_A:
+                    m_player.setDirection(playerDirection - glm::vec3(-1.0f, 0.0f, 0.0f)); // Stop moving left
+                    break;
+                case GLFW_KEY_D:
+                    m_player.setDirection(playerDirection - glm::vec3(1.0f, 0.0f, 0.0f)); // Stop moving right
+                    break;
+            }
+        }
         switch (key)
         {
             // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
@@ -329,6 +391,7 @@ public:
             break;
         default:
             std::cout << "Key released: " << key << std::endl;
+            break;
         }
     }
 
@@ -454,6 +517,12 @@ private:
     bool m_useMaterial{true};
     int m_shadingMode{0}; // how to shade the model, 0 = diffuse
     glm::dvec2 m_mousePos;
+
+    // Player and camera variables
+    Player m_player;
+    int m_previousCameraMode{ 0 };
+    int m_cameraMode{ 0 }; // 0 = freecam, 1 = top down, 2 = 3rd person
+
 
     // Bezier Variables
     std::vector<glm::vec3> m_blist; // point list for bezier

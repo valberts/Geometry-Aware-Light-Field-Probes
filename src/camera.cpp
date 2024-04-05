@@ -18,9 +18,10 @@ Camera::Camera(Window* pWindow, const glm::vec3& pos, const glm::vec3& forward, 
     , m_pWindow(pWindow)
     , m_moveSpeed(moveSpeed)
     , m_lookSpeed(lookSpeed)
+    , m_cameraMode(0)
+    , m_previousCameraMode(0)
 {
 }
-
 
 
 void Camera::setUserInteraction(bool enabled)
@@ -67,18 +68,18 @@ void Camera::updateInput()
     if (m_userInteraction) {
         glm::vec3 localMoveDelta{ 0 };
         const glm::vec3 right = glm::normalize(glm::cross(m_forward, m_up));
-        //if (m_pWindow->isKeyPressed(GLFW_KEY_A))
-        //    m_position -= m_moveSpeed * right;
-        //if (m_pWindow->isKeyPressed(GLFW_KEY_D))
-        //    m_position += m_moveSpeed * right;
-        //if (m_pWindow->isKeyPressed(GLFW_KEY_W))
-        //    m_position += m_moveSpeed * m_forward;
-        //if (m_pWindow->isKeyPressed(GLFW_KEY_S))
-        //    m_position -= m_moveSpeed * m_forward;
-        //if (m_pWindow->isKeyPressed(GLFW_KEY_R))
-        //    m_position += m_moveSpeed * m_up;
-        //if (m_pWindow->isKeyPressed(GLFW_KEY_F))
-        //    m_position -= m_moveSpeed * m_up;
+        if (m_pWindow->isKeyPressed(GLFW_KEY_A))
+            m_position -= m_moveSpeed * right;
+        if (m_pWindow->isKeyPressed(GLFW_KEY_D))
+            m_position += m_moveSpeed * right;
+        if (m_pWindow->isKeyPressed(GLFW_KEY_W))
+            m_position += m_moveSpeed * m_forward;
+        if (m_pWindow->isKeyPressed(GLFW_KEY_S))
+            m_position -= m_moveSpeed * m_forward;
+        if (m_pWindow->isKeyPressed(GLFW_KEY_R))
+            m_position += m_moveSpeed * m_up;
+        if (m_pWindow->isKeyPressed(GLFW_KEY_F))
+            m_position -= m_moveSpeed * m_up;
 
         const glm::dvec2 cursorPos = m_pWindow->getCursorPos();
         const glm::vec2 delta = m_lookSpeed * glm::vec2(cursorPos - m_prevCursorPos);
@@ -108,4 +109,16 @@ void Camera::setPos(glm::vec3 newPos)
     else {
         m_prevCursorPos = m_pWindow->getCursorPos();
     }
+}
+
+void Camera::setPosition(glm::vec3 newPos) {
+    m_position = newPos;
+}
+
+void Camera::setForward(glm::vec3 newForward) {
+    m_forward = newForward;
+}
+
+void Camera::setUp(glm::vec3 newUp) {
+    m_up = newUp;
 }

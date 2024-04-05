@@ -13,8 +13,11 @@ public:
     Camera(Window* pWindow, const glm::vec3& position, const glm::vec3& forward, float moveSpeed, float lookSpeed);
 
     void updateInput();
-    void setPos(glm::vec3 newPos);
     void setUserInteraction(bool enabled);
+    void setPos(glm::vec3 newPos);
+    void setForward(glm::vec3 newForward);
+    void setUp(glm::vec3 newUp);
+    void setPosition(glm::vec3 newPos);
 
     glm::vec3 cameraPos() const;
     glm::vec3 forward() const;
@@ -42,6 +45,8 @@ private:
     glm::vec3 m_up{ 0, 1, 0 };
     float m_moveSpeed{ 0.0f };
     float m_lookSpeed{ 0.0f };
+    int m_previousCameraMode{ 0 };
+    int m_cameraMode{ 0 }; // 0 = freecam, 1 = top down, 2 = 3rd person
 
     const Window* m_pWindow;
     bool m_userInteraction{ true };
