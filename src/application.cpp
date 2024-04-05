@@ -22,6 +22,7 @@ DISABLE_WARNINGS_POP()
 #include <functional>
 #include <iostream>
 #include <vector>
+#include <random>
 #include "camera.h"
 #include "managers.cpp"
 
@@ -107,6 +108,8 @@ public:
         ImGui::InputInt("Shading mode", &m_shadingMode); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
         ImGui::Text("Value is: %i", m_shadingMode); // Use C printf formatting rules (%i is a signed integer)
         ImGui::Checkbox("Use material if no texture", &m_useMaterial);
+        ImGui::InputInt("Create a snake of length: %i", &m_numBodySegments);
+        ImGui::Checkbox("Animate Snake", &animateSnake);
 
 
         if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
@@ -154,6 +157,59 @@ public:
             glDrawArrays(GL_POINTS, 0, 1);
         }
         // render points -----
+
+        // Render snake (hierarchical box transform)
+        // default length = 6
+        if (animateSnake) {
+            if (m_move_right) m_snake_pos.x += 0.05f;
+            if (m_move_left) m_snake_pos.x -= 0.05f;
+            if (m_move_down) m_snake_pos.z += 0.05f;
+            if (m_move_up) m_snake_pos.z -= 0.05f;
+
+            glm::vec3 headScale(0.08f, 0.1f, 0.2f);
+            glm::vec3 headTranslation = m_snake_pos;
+            glm::mat4 trans_axis_to_side_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, -1.0));
+            glm::mat4 trans_axis_to_side_back_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, 1.0));
+
+            glm::vec3 headToBody(0.0f, 0.0f, 2.0f);
+            glm::mat4 trans_headToBody = glm::translate(glm::mat4(1.0f), headToBody);
+
+            glm::mat4 headScaleMatrix = glm::scale(glm::mat4(1.0f), headScale);
+            glm::mat4 headTranslationMatrix = glm::translate(glm::mat4(1.0f), headTranslation);
+            if (m_head_rotationAngle >= 45.0f || m_head_rotationAngle <= -45.0f) {
+                m_head_rotationDirection *= -1;
+            }
+            m_head_rotationAngle += float(m_head_rotationDirection);
+            //std::cout << m_head_rotationAngle << std::endl;
+            glm::mat4 rotz_1 = glm::rotate(glm::mat4(1.0f), glm::radians(m_head_rotationAngle), glm::vec3(0, 1, 0));
+            glm::mat4 headModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
+
+            const glm::mat4 headMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * headModelMatrix;
+            const glm::mat3 headScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(headModelMatrix));
+            renderMesh("default", "cube", headMvpMatrix, headModelMatrix, headScaledNormalModelMatrix);
+
+            glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
+            int rot_dir = -1;
+
+            for (int i = 0; i < m_numBodySegments; ++i) {
+                // add random angle to body rotation
+                /*std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> dist(0.5f, 2.0f);
+                float randomNumber = dist(gen);*/
+                glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(rot_dir * m_head_rotationAngle * 1.2f), glm::vec3(0, 1, 0));
+                glm::mat4 bodyModelMatrix = lastModelMatrix * trans_headToBody * rotz_2;
+                lastModelMatrix = bodyModelMatrix;
+                rot_dir *= -1;
+
+                // Render the current body segment
+                const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
+                const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
+                renderMesh("default", "cube", bodyMvpMatrix, bodyModelMatrix, bodyScaledNormalModelMatrix);
+            }
+        }
+
+
 
         // Processes input and swaps the window buffer
         m_window.swapBuffers();
@@ -208,7 +264,24 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyPressed(int key, int mods)
     {
-        std::cout << "Key pressed: " << key << std::endl;
+        switch (key) {
+        // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
+        case 262:
+            m_move_right = true;
+            break;
+        case 263:
+            m_move_left = true;
+            break;
+        case 264:
+            m_move_down = true;
+            break;
+        case 265:
+            m_move_up = true;
+            break;
+        default:
+            std::cout << "Key pressed: " << key << std::endl;
+        }
+        
     }
 
     // In here you can handle key releases
@@ -216,7 +289,24 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyReleased(int key, int mods)
     {
-        std::cout << "Key released: " << key << std::endl;
+        switch (key) {
+            // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
+        case 262:
+            m_move_right = false;
+            break;
+        case 263:
+            m_move_left = false;
+            break;
+        case 264:
+            m_move_down = false;
+            break;
+        case 265:
+            m_move_up = false;
+            break;
+        default:
+            std::cout << "Key released: " << key << std::endl;
+        }
+        
     }
 
     // If the mouse is moved this function will be called with the x, y screen-coordinates of the mouse
@@ -343,6 +433,17 @@ private:
     bool isCameraMoving = false;
     float cameraMovementTime = 0.0f; // Time elapsed during camera movement
     float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)
+    bool animateSnake { false }; // only draw snake when true
+    float animationTime = 0.0f; // Animation time
+    float animationSpeed = 1.0f; // Speed of animation
+    int m_numBodySegments{ 5 }; // num of body segements
+    int m_head_rotationDirection = 1;
+    float m_head_rotationAngle = 0.0f;
+    glm::vec3 m_snake_pos = glm::vec3(-1.5f, 0.0f, 0.0f);
+    bool m_move_right = false;
+    bool m_move_left = false;
+    bool m_move_down = false;
+    bool m_move_up = false;
 
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
