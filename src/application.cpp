@@ -134,7 +134,7 @@ public:
         glEnable(GL_DEPTH_TEST);
 
         renderMesh("default", "dragon", m_modelMatrix);
-        renderMesh("default", "floor", m_modelMatrix, "floor");
+        renderMesh("default", "floor", glm::mat4(1.0f), "floor");
 
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
         // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
@@ -208,6 +208,21 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyPressed(int key, int mods)
     {
+        switch (key) {
+            case GLFW_KEY_W: {
+                //const glm::vec3 right = glm::normalize(glm::cross(m_camera.forward(), m_camera.up()));
+                //glm::translate(m_modelMatrix, right);
+                //m_modelMatrix *= glm::vec4(1.1, 1.1, 1.1, 1.0);
+                //m_modelMatrix -= 0.03f * right;
+                break;
+            }
+            case GLFW_KEY_ESCAPE: {
+                    m_window.close();
+                    exit(0);
+                    break;
+            }
+                
+        } 
         std::cout << "Key pressed: " << key << std::endl;
     }
 
@@ -343,7 +358,6 @@ private:
     bool isCameraMoving = false;
     float cameraMovementTime = 0.0f; // Time elapsed during camera movement
     float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)
-
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
     //glm::mat4 m_viewMatrix = glm::lookAt(glm::vec3(-1, 1, -1), glm::vec3(0), glm::vec3(0, 1, 0));

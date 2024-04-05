@@ -17,6 +17,8 @@ public:
     void setUserInteraction(bool enabled);
 
     glm::vec3 cameraPos() const;
+    glm::vec3 forward() const;
+    glm::vec3 up() const;
     glm::mat4 viewMatrix() const;
 
     std::string toString() const {
