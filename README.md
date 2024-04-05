@@ -19,13 +19,13 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 - [ ] Material textures: e.g., kd, ks, shininess, roughness.
 - [ ] Normal mapping.
 - [ ] Environment mapping.
-- [ ] Smooth paths: at least one feature of your demo should make use of smooth paths using Bézier curves. It can be the movement of a model, a light source, or a camera. Use a path composed of at least three Cubic Bézier curves.
+- [x] (Hazel)Smooth paths: at least one feature of your demo should make use of smooth paths using Bézier curves. It can be the movement of a model, a light source, or a camera. Use a path composed of at least three Cubic Bézier curves.
 - [ ] Hierarchical transformations: include one object with several animated components. This should be done in code, not imported from Blender. Practical examples are robot arm, snake, solar system, vehicle composed of multiple parts
 
 ## Extra effects:
 
 For example: (but we can come up with any others)
-- [ ] Move at constant speed along Bézier curve
+- [x] (Hazel)Move at constant speed along Bézier curve (Cam move, predefined bezier, 3 curves)
 - [ ] Particle effects (explosions, magic spells, fire)
 - [ ] Point-lights like torches or light bulbs
 - [ ] The illusion of an infinite terrain by adding new tiles on the fly

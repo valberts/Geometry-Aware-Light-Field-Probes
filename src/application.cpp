@@ -242,11 +242,18 @@ public:
             //x = 1.0f - (2.0f * m_mousePos.x) / size.x;
             //y = (2.0f * m_mousePos.y) / size.y - 1.0f;
             //m_blist.push_back(glm::vec3(float(x), float(y), 0.0f)); // TODO: set z
-            m_blist.push_back(glm::vec3(1.0f, 0.0f, 0.5f));
-            m_blist.push_back(glm::vec3(1.0f, 0.0f, 1.5f));
-            m_blist.push_back(glm::vec3(0.0f, 0.0f, 1.5f));
-            m_blist.push_back(glm::vec3(0.0f, 0.0f, 0.5f));
             
+            // predefined bline control points
+            m_blist.push_back(glm::vec3(-1.0f, 0.0f, -0.5f));
+            m_blist.push_back(glm::vec3(-1.0f, 0.0f, -1.5f));
+            m_blist.push_back(glm::vec3(0.0f, 0.0f, -1.5f));
+            m_blist.push_back(glm::vec3(0.0f, 0.0f, -0.5f));
+            m_blist.push_back(glm::vec3(1.0f, 0.0f, -0.5f));
+            m_blist.push_back(glm::vec3(1.0f, 1.0f, -0.5f));
+            m_blist.push_back(glm::vec3(0.0f, 1.0f, -0.5f));
+            m_blist.push_back(glm::vec3(0.0f, 1.0f, -1.5f));
+            m_blist.push_back(glm::vec3(0.0f, 0.0f, -1.5f));
+            m_blist.push_back(glm::vec3(0.0f, 0.0f, -0.5f));
             break;
         case 2: // middle
             break;
@@ -270,10 +277,23 @@ public:
         return start + ((end - start) * t);
     }
 
-    glm::vec3 CalculateBezierPoint(float i) {
-        glm::vec3 posA = getPt(m_blist[0], m_blist[1], i);
-        glm::vec3 posB = getPt(m_blist[1], m_blist[2], i);
-        glm::vec3 posC = getPt(m_blist[2], m_blist[3], i);
+    glm::vec3 CalculateBezierPoint(float i, int s) {
+        glm::vec3 posA, posB, posC;
+        if (s == 1) {
+            posA = getPt(m_blist[0], m_blist[1], i);
+            posB = getPt(m_blist[1], m_blist[2], i);
+            posC = getPt(m_blist[2], m_blist[3], i);
+        }
+        else if (s == 2) {
+            posA = getPt(m_blist[3], m_blist[4], i);
+            posB = getPt(m_blist[4], m_blist[5], i);
+            posC = getPt(m_blist[5], m_blist[6], i);
+        }
+        else {
+            posA = getPt(m_blist[6], m_blist[7], i);
+            posB = getPt(m_blist[7], m_blist[8], i);
+            posC = getPt(m_blist[8], m_blist[9], i);
+        }
 
         glm::vec3 posAB = getPt(posA, posB, i);
         glm::vec3 posBC = getPt(posB, posC, i);
@@ -296,7 +316,11 @@ public:
             }
 
             // Calculate new camera position based on Bezier path and cameraMovementTime
-            m_camera.setPos(CalculateBezierPoint(cameraMovementTime / cameraMovementDuration));
+            int s = 0;
+            float timePieceDuration = cameraMovementDuration / 3;
+            int cameraPosition = int(std::min((cameraMovementTime / timePieceDuration) + 1, 3.0f));
+            float p_local = (cameraMovementTime - (float(cameraPosition - 1)) * timePieceDuration) / timePieceDuration;
+            m_camera.setPos(CalculateBezierPoint(p_local , cameraPosition));
         }
     }
 
