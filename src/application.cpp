@@ -186,7 +186,7 @@ public:
 
             const glm::mat4 headMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * headModelMatrix;
             const glm::mat3 headScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(headModelMatrix));
-            renderMesh("default", "cube", headMvpMatrix, headModelMatrix, headScaledNormalModelMatrix);
+            renderMesh("default", "cube", headModelMatrix);
 
             glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
             int rot_dir = -1;
@@ -205,7 +205,7 @@ public:
                 // Render the current body segment
                 const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
                 const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
-                renderMesh("default", "cube", bodyMvpMatrix, bodyModelMatrix, bodyScaledNormalModelMatrix);
+                renderMesh("default", "cube", bodyModelMatrix);
             }
         }
 
