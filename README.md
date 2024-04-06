@@ -15,7 +15,7 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 
 ## Minimal features:
 
-- [ ] Multiple viewpoints. For example, a top view and a third-person camera that follows a character. The position and movement of the camera is up to you. You can also create a cutscene to add new viewpoints.
+- [x] (Vincent) Multiple viewpoints. For example, a top view and a third-person camera that follows a character. The position and movement of the camera is up to you. You can also create a cutscene to add new viewpoints.
 - [ ] Advanced shading: include more complex material models, such as PBR shaders.
 - [ ] Material textures: e.g., kd, ks, shininess, roughness.
 - [ ] Normal mapping.
