@@ -64,6 +64,8 @@ public:
 
             m_shaderManager->loadShader("light", {{GL_VERTEX_SHADER, "shaders/light_vertex.glsl"},
                                                   {GL_FRAGMENT_SHADER, "shaders/light_frag.glsl"}});
+            m_shaderManager->loadShader("bulb", { {GL_VERTEX_SHADER, "shaders/bulb_vert.glsl"},
+                                                  {GL_FRAGMENT_SHADER, "shaders/bulb_frag.glsl"} });
             // Any new shaders can be added below in similar fashion.
             // ==> Don't forget to reconfigure CMake when you do!
             //     Visual Studio: PROJECT => Generate Cache for ComputerGraphics
@@ -115,6 +117,15 @@ public:
         ImGui::InputInt("Shading mode", &m_shadingMode); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
         ImGui::InputInt("Camera mode", &m_cameraMode);
         ImGui::Checkbox("Use material if no texture", &m_useMaterial);
+
+        ImGui::Checkbox("Night Time", &m_night);
+
+        if (ImGui::Button("Add Bulb")) {
+            m_enableBulb = true;
+        }
+
+        ImGui::ColorEdit3("Bulb Color", (float*)&m_bulbColor);
+
         ImGui::InputInt("Create a snake of length: %i", &m_numBodySegments);
         ImGui::Checkbox("Animate Snake", &animateSnake);
 
@@ -173,8 +184,25 @@ public:
         // ...
         glEnable(GL_DEPTH_TEST);
 
-        renderMesh("default", "dragon", m_player.getMatrix());
+        // default depth
+        glDepthMask(GL_TRUE);
+        glDepthFunc(GL_LEQUAL);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         renderMesh("default", "floor", glm::mat4(1.0f), "floor");
+        renderMesh("default", "dragon", m_player.getMatrix());
+
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Enable color writes.
+        glEnable(GL_BLEND); // Enable blending.
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+        renderMesh("default", "floor", glm::mat4(1.0f), "floor");
+        renderMesh("default", "dragon", m_player.getMatrix());
+        if (m_enableBulb) {
+
+            renderMesh("bulb", "dragon", m_player.getMatrix());
+            renderMesh("bulb", "floor", glm::mat4(1.0f), "floor");
+        }
+        glDisable(GL_BLEND);
+        
 
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
         // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
@@ -195,6 +223,28 @@ public:
             glDrawArrays(GL_POINTS, 0, 1);
         }
         // render points -----
+        // also draw a green point for bulb position
+        if (m_enableBulb) {
+            if (m_move_bulb_right)
+                m_bulbPos.z += 0.02f;
+            if (m_move_bulb_left)
+                m_bulbPos.z -= 0.02f;
+            if (m_move_bulb_down)
+                m_bulbPos.y -= 0.02f;
+            if (m_move_bulb_up)
+                m_bulbPos.y += 0.02f;
+            if (m_move_bulb_in)
+                m_bulbPos.x += 0.02f;
+            if (m_move_bulb_out)
+                m_bulbPos.x -= 0.02f;
+            const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_bulbPos, 1.0f);
+            const glm::vec3 color{ 0, 1, 0 };
+
+            glPointSize(20.0f);
+            glUniform4fv(0, 1, glm::value_ptr(screenPos));
+            glUniform3fv(1, 1, glm::value_ptr(color));
+            glDrawArrays(GL_POINTS, 0, 1);
+        }
 
         // Render snake (hierarchical box transform)
         // default length = 6
@@ -300,6 +350,14 @@ public:
                 glUniform1i(5, m_useMaterial);
                 glUniform1i(6, m_shadingMode);
             }
+            if (shaderName == "default") {
+                glUniform3fv(7, 1, glm::value_ptr(m_defaultLightPos));
+                glUniform1i(9, m_night);
+            }
+            else if (shaderName == "bulb") {
+                glUniform3fv(7, 1, glm::value_ptr(m_bulbPos));
+                glUniform3fv(8, 1, glm::value_ptr(m_bulbColor));
+            }
             mesh.draw(shader);
         }
     }
@@ -326,30 +384,67 @@ public:
                 break;
             }
         }
-
-        switch (key)
-        {
-        // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
-        case 262:
-            m_move_right = true;
-            break;
-        case 263:
-            m_move_left = true;
-            break;
-        case 264:
-            m_move_down = true;
-            break;
-        case 265:
-            m_move_up = true;
-            break;
-        case GLFW_KEY_ESCAPE:
-            m_window.close();
-            exit(0);
-            break;
-        default:
-            std::cout << "Key pressed: " << key << std::endl;
-            break;
+        if (!m_leftShiftPressed) {
+            switch (key)
+            {
+                // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
+            case GLFW_KEY_RIGHT:
+                m_move_right = true;
+                break;
+            case GLFW_KEY_LEFT:
+                m_move_left = true;
+                break;
+            case GLFW_KEY_DOWN:
+                m_move_down = true;
+                break;
+            case GLFW_KEY_UP:
+                m_move_up = true;
+                break;
+            case GLFW_KEY_ESCAPE:
+                m_window.close();
+                exit(0);
+                break;
+            case GLFW_KEY_LEFT_SHIFT:
+                m_leftShiftPressed = true;
+                break;
+            default:
+                break;
+            }
         }
+        else {
+            switch (key)
+            {
+                // use UP DOWN LEFT RIGHT PGUP PGDOWN to move the light bulb
+            case GLFW_KEY_RIGHT:
+                m_move_bulb_right = true;
+                break;
+            case GLFW_KEY_LEFT:
+                m_move_bulb_left = true;
+                break;
+            case GLFW_KEY_DOWN:
+                m_move_bulb_down = true;
+                break;
+            case GLFW_KEY_UP:
+                m_move_bulb_up = true;
+                break;
+            case GLFW_KEY_PAGE_UP:
+                m_move_bulb_in = true;
+                break;
+            case GLFW_KEY_PAGE_DOWN:
+                m_move_bulb_out = true;
+                break;
+            case GLFW_KEY_ESCAPE:
+                m_window.close();
+                exit(0);
+                break;
+            case GLFW_KEY_LEFT_SHIFT:
+                m_leftShiftPressed = true;
+                break;
+            default:
+                break;
+            }
+        }
+        std::cout << "Key pressed: " << key << std::endl;
     }
 
     // In here you can handle key releases
@@ -377,17 +472,32 @@ public:
         switch (key)
         {
             // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
-        case 262:
+        case GLFW_KEY_RIGHT:
             m_move_right = false;
+            m_move_bulb_right = false;
             break;
-        case 263:
+        case GLFW_KEY_LEFT:
             m_move_left = false;
+            m_move_bulb_left = false;
             break;
-        case 264:
+        case GLFW_KEY_DOWN:
             m_move_down = false;
+            m_move_bulb_down = false;
             break;
-        case 265:
+        case GLFW_KEY_UP:
             m_move_up = false;
+            m_move_bulb_up = false;
+            break;
+        case GLFW_KEY_PAGE_UP:
+            m_move_up = false;
+            m_move_bulb_in = false;
+            break;
+        case GLFW_KEY_PAGE_DOWN:
+            m_move_up = false;
+            m_move_bulb_out = false;
+            break;
+        case GLFW_KEY_LEFT_SHIFT:
+            m_leftShiftPressed = false;
             break;
         default:
             std::cout << "Key released: " << key << std::endl;
@@ -541,6 +651,19 @@ private:
     bool m_move_left = false;
     bool m_move_down = false;
     bool m_move_up = false;
+    // bulb pos control
+    bool m_move_bulb_right = false;
+    bool m_move_bulb_left = false;
+    bool m_move_bulb_up = false;
+    bool m_move_bulb_down = false;
+    bool m_move_bulb_in = false;
+    bool m_move_bulb_out = false;
+    glm::vec3 m_bulbColor = glm::vec3(0.5, 0.5, 0.5);
+    glm::vec3 m_bulbPos = glm::vec3(0.5, 0.5, 0.5);
+    bool m_enableBulb = false;
+    glm::vec3 m_defaultLightPos = glm::vec3(0.0f, 10.0f, 10.0f);
+    bool m_leftShiftPressed = false;
+    bool m_night { false };
 
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
