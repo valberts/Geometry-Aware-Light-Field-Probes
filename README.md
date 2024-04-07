@@ -20,22 +20,22 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 - [ ] Material textures: e.g., kd, ks, shininess, roughness.
 - [ ] Normal mapping.
 - [ ] Environment mapping.
-- [x] (Hazel)Smooth paths: at least one feature of your demo should make use of smooth paths using Bézier curves. It can be the movement of a model, a light source, or a camera. Use a path composed of at least three Cubic Bézier curves.
-- [x] (Hazel)Hierarchical transformations: include one object with several animated components. This should be done in code, not imported from Blender. Practical examples are robot arm, snake, solar system, vehicle composed of multiple parts
+- [x] (Hazel) Smooth paths: at least one feature of your demo should make use of smooth paths using Bézier curves. It can be the movement of a model, a light source, or a camera. Use a path composed of at least three Cubic Bézier curves.
+- [x] (Hazel) Hierarchical transformations: include one object with several animated components. This should be done in code, not imported from Blender. Practical examples are robot arm, snake, solar system, vehicle composed of multiple parts
 
 ## Extra effects:
 
 For example: (but we can come up with any others)
-- [x] (Hazel)Move at constant speed along Bézier curve (Cam move, predefined bezier, 3 curves)
+- [x] (Hazel) Move at constant speed along Bézier curve (Cam move, predefined bezier, 3 curves)
 - [ ] Particle effects (explosions, magic spells, fire)
-- [x] (Hazel)Point-lights like torches or light bulbs (color and pos changeable)
+- [x] (Hazel) Point-lights like torches or light bulbs (color and pos changeable)
 - [ ] The illusion of an infinite terrain by adding new tiles on the fly
 - [ ] Post-processing effects
 - [ ] Procedurally generated terrains
 - [ ] Water surfaces that are procedurally generated (produce a vertex grid and move the vertices according to a combination of several sinus functions that you can evaluate in the vertex shader).
 - [ ] Animated textures (by switching textures frame to frame)
 - [ ] Zoom effects / perspective changes
-- [x] (Hazel)Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
+- [x] (Hazel) Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
 - [ ] A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
 - [ ] Collision between the player and objects
 - [ ] Generate a maze or dungeon for the player to move through
