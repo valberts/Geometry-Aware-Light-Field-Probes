@@ -27,9 +27,9 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 
 For example: (but we can come up with any others)
 - [x] (Hazel) Move at constant speed along Bézier curve (Cam move, predefined bezier, 3 curves)
-- [ ] (Hazel) Particle effects (explosions, magic spells, fire)
+- [x] (Hazel) Particle effects (explosions, magic spells, fire) (Simple flame)
 - [x] (Hazel) Point-lights like torches or light bulbs (color and pos changeable)
-- [ ] (Hazel) Spot-lights, shadow mapping
+- [ ] (Hazel) Spotlight
 - [ ] The illusion of an infinite terrain by adding new tiles on the fly
 - [ ] (Hazel) Post-processing effects
 - [ ] Procedurally generated terrains

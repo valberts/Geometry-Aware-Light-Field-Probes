@@ -27,6 +27,7 @@ DISABLE_WARNINGS_POP()
 #include "camera.h"
 #include "managers.cpp"
 #include "player.cpp"
+#include "fire.h"
 
 class Application
 {
@@ -66,6 +67,8 @@ public:
                                                   {GL_FRAGMENT_SHADER, "shaders/light_frag.glsl"}});
             m_shaderManager->loadShader("bulb", { {GL_VERTEX_SHADER, "shaders/bulb_vert.glsl"},
                                                   {GL_FRAGMENT_SHADER, "shaders/bulb_frag.glsl"} });
+            m_shaderManager->loadShader("fire", { {GL_VERTEX_SHADER, "shaders/fire_vert.glsl"},
+                                                  {GL_FRAGMENT_SHADER, "shaders/fire_frag.glsl"} });
             // Any new shaders can be added below in similar fashion.
             // ==> Don't forget to reconfigure CMake when you do!
             //     Visual Studio: PROJECT => Generate Cache for ComputerGraphics
@@ -119,6 +122,7 @@ public:
         ImGui::Checkbox("Use material if no texture", &m_useMaterial);
 
         ImGui::Checkbox("Night Time", &m_night);
+        ImGui::Checkbox("Light a flame", &m_flame);
 
         if (ImGui::Button("Add Bulb")) {
             m_enableBulb = true;
@@ -304,6 +308,31 @@ public:
             }
         }
 
+        // init fire (only run once)
+        if (m_flame && !m_flame_init) {
+            initFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.7, 0.4, 1.3)); // TODO: let user set position range
+            m_flame_init = true;
+        }
+        else if (m_flame && m_flame_init) {
+            // render flame
+            for (int i = 0; i < MAX_PARTICLES; i++) {
+                glm::vec3 particleScale = glm::vec3(0.002f, 0.002f, 0.002f);
+                glm::mat4 particleScaleMatrix = glm::scale(glm::mat4(1.0f), particleScale);
+                glm::vec3 particleTranslation = m_fire[i].pos;
+                glm::mat4 particleTranslationMatrix = glm::translate(glm::mat4(1.0f), particleTranslation);
+                glm::mat4 particleModelMatrix = particleTranslationMatrix * particleScaleMatrix;
+                glEnable(GL_BLEND); // Enable blending.
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+                renderMesh("fire", "cube", particleModelMatrix, std::nullopt, m_fire[i].color);
+                glDisable(GL_BLEND);
+            }
+            // update particles
+            updateFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.5, 0.6, 1.5));
+        }
+        else if (!m_flame) {
+            m_flame_init = false;
+        }
+
         // Processes input and swaps the window buffer
         m_window.swapBuffers();
     }
@@ -319,7 +348,8 @@ public:
     void renderMesh(const std::string &shaderName,
                     const std::string &meshName,
                     const glm::mat4 &modelMatrix,
-                    const std::optional<std::string> &textureName = std::nullopt)
+                    const std::optional<std::string> &textureName = std::nullopt,
+                    const std::optional<glm::vec3> &inputColor = std::nullopt) // add this for managing flame color
     {
         auto &meshes = m_meshManager->getMeshes(meshName);
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
@@ -357,6 +387,9 @@ public:
             else if (shaderName == "bulb") {
                 glUniform3fv(7, 1, glm::value_ptr(m_bulbPos));
                 glUniform3fv(8, 1, glm::value_ptr(m_bulbColor));
+            }
+            else if (shaderName == "fire") {
+                glUniform3fv(10, 1, glm::value_ptr(*inputColor));
             }
             mesh.draw(shader);
         }
@@ -664,6 +697,9 @@ private:
     glm::vec3 m_defaultLightPos = glm::vec3(0.0f, 10.0f, 10.0f);
     bool m_leftShiftPressed = false;
     bool m_night { false };
+    bool m_flame { false };
+    bool m_flame_init = false;
+    Particle m_fire[MAX_PARTICLES];
 
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
