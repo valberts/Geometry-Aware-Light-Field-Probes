@@ -16,7 +16,7 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 ## Minimal features:
 
 - [x] (Vincent) Multiple viewpoints. For example, a top view and a third-person camera that follows a character. The position and movement of the camera is up to you. You can also create a cutscene to add new viewpoints.
-- [ ] Advanced shading: include more complex material models, such as PBR shaders.
+- [ ] (Vincent) Advanced shading: include more complex material models, such as PBR shaders.
 - [ ] Material textures: e.g., kd, ks, shininess, roughness.
 - [ ] Normal mapping.
 - [ ] Environment mapping.
@@ -37,7 +37,7 @@ For example: (but we can come up with any others)
 - [ ] Animated textures (by switching textures frame to frame)
 - [ ] Zoom effects / perspective changes
 - [x] (Hazel) (Really simple, will improve) Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
-- [ ] A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
+- [ ] (Vincent) A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
 - [ ] Collision between the player and objects
 - [ ] Generate a maze or dungeon for the player to move through
 - [ ] Generate environment props like procedural buildings
