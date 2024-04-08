@@ -120,6 +120,7 @@ public:
         ImGui::Begin("Window");
         ImGui::InputInt("Shading mode", &m_shadingMode); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
         ImGui::InputInt("Camera mode", &m_cameraMode);
+        ImGui::Checkbox("Normal Mapping", &m_enableNormalMapping);
         ImGui::Checkbox("Use material if no texture", &m_useMaterial);
 
         ImGui::Checkbox("Night Time", &m_night);
@@ -131,7 +132,7 @@ public:
 
         ImGui::ColorEdit3("Bulb Color", (float*)&m_bulbColor);
 
-        ImGui::InputInt("Create a snake of length: %i", &m_numBodySegments);
+        ImGui::InputInt("Snake length: %i", &m_numBodySegments);
         ImGui::Checkbox("Animate Snake", &animateSnake);
 
         if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
@@ -227,86 +228,17 @@ public:
             glUniform3fv(1, 1, glm::value_ptr(color));
             glDrawArrays(GL_POINTS, 0, 1);
         }
+
         // render points -----
         // also draw a green point for bulb position
         if (m_enableBulb) {
-            if (m_move_bulb_right)
-                m_bulbPos.z += 0.02f;
-            if (m_move_bulb_left)
-                m_bulbPos.z -= 0.02f;
-            if (m_move_bulb_down)
-                m_bulbPos.y -= 0.02f;
-            if (m_move_bulb_up)
-                m_bulbPos.y += 0.02f;
-            if (m_move_bulb_in)
-                m_bulbPos.x += 0.02f;
-            if (m_move_bulb_out)
-                m_bulbPos.x -= 0.02f;
-            const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_bulbPos, 1.0f);
-            const glm::vec3 color{ 0, 1, 0 };
-
-            glPointSize(20.0f);
-            glUniform4fv(0, 1, glm::value_ptr(screenPos));
-            glUniform3fv(1, 1, glm::value_ptr(color));
-            glDrawArrays(GL_POINTS, 0, 1);
+            renderBulb(mvpMatrix);
         }
 
         // Render snake (hierarchical box transform)
         // default length = 6
-        if (animateSnake)
-        {
-            if (m_move_right)
-                m_snake_pos.x += 0.05f;
-            if (m_move_left)
-                m_snake_pos.x -= 0.05f;
-            if (m_move_down)
-                m_snake_pos.z += 0.05f;
-            if (m_move_up)
-                m_snake_pos.z -= 0.05f;
-
-            glm::vec3 headScale(0.08f, 0.1f, 0.2f);
-            glm::vec3 headTranslation = m_snake_pos;
-            glm::mat4 trans_axis_to_side_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, -1.0));
-            glm::mat4 trans_axis_to_side_back_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, 1.0));
-
-            glm::vec3 headToBody(0.0f, 0.0f, 2.0f);
-            glm::mat4 trans_headToBody = glm::translate(glm::mat4(1.0f), headToBody);
-
-            glm::mat4 headScaleMatrix = glm::scale(glm::mat4(1.0f), headScale);
-            glm::mat4 headTranslationMatrix = glm::translate(glm::mat4(1.0f), headTranslation);
-            if (m_head_rotationAngle >= 45.0f || m_head_rotationAngle <= -45.0f)
-            {
-                m_head_rotationDirection *= -1;
-            }
-            m_head_rotationAngle += float(m_head_rotationDirection);
-            // std::cout << m_head_rotationAngle << std::endl;
-            glm::mat4 rotz_1 = glm::rotate(glm::mat4(1.0f), glm::radians(m_head_rotationAngle), glm::vec3(0, 1, 0));
-            glm::mat4 headModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
-
-            const glm::mat4 headMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * headModelMatrix;
-            const glm::mat3 headScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(headModelMatrix));
-            renderMesh("default", "cube", headModelMatrix);
-
-            glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
-            int rot_dir = -1;
-
-            for (int i = 0; i < m_numBodySegments; ++i)
-            {
-                // add random angle to body rotation
-                /*std::random_device rd;
-                std::mt19937 gen(rd());
-                std::uniform_real_distribution<float> dist(0.5f, 2.0f);
-                float randomNumber = dist(gen);*/
-                glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(rot_dir * m_head_rotationAngle * 1.2f), glm::vec3(0, 1, 0));
-                glm::mat4 bodyModelMatrix = lastModelMatrix * trans_headToBody * rotz_2;
-                lastModelMatrix = bodyModelMatrix;
-                rot_dir *= -1;
-
-                // Render the current body segment
-                const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
-                const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
-                renderMesh("default", "cube", bodyModelMatrix);
-            }
+        if (animateSnake) {
+            renderSnake();
         }
 
         // init fire (only run once)
@@ -315,20 +247,7 @@ public:
             m_flame_init = true;
         }
         else if (m_flame && m_flame_init) {
-            // render flame
-            for (int i = 0; i < MAX_PARTICLES; i++) {
-                glm::vec3 particleScale = glm::vec3(0.004f, 0.005f, 0.004f);
-                glm::mat4 particleScaleMatrix = glm::scale(glm::mat4(1.0f), particleScale);
-                glm::vec3 particleTranslation = m_fire[i].pos;
-                glm::mat4 particleTranslationMatrix = glm::translate(glm::mat4(1.0f), particleTranslation);
-                glm::mat4 particleModelMatrix = particleTranslationMatrix * particleScaleMatrix;
-                //glEnable(GL_BLEND); // Enable blending.
-                //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-                renderMesh("fire", "cube", particleModelMatrix, std::nullopt, std::nullopt, m_fire[i].color);
-                //glDisable(GL_BLEND);
-            }
-            // update particles
-            updateFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.5, 0.6, 1.5));
+            renderFlame();
         }
         else if (!m_flame) {
             m_flame_init = false;
@@ -386,7 +305,7 @@ public:
             }
 
             // Normal map
-            if (hasNormalMap)
+            if (hasNormalMap && m_enableNormalMapping)
             {
                 Texture* normalMap = m_textureManager->getTexture(*normalMapName);
                 normalMap->bind(GL_TEXTURE1); 
@@ -415,6 +334,100 @@ public:
 
             mesh.draw(shader);
         }
+    }
+
+    void renderSnake() {
+        if (m_move_right)
+            m_snake_pos.x += 0.05f;
+        if (m_move_left)
+            m_snake_pos.x -= 0.05f;
+        if (m_move_down)
+            m_snake_pos.z += 0.05f;
+        if (m_move_up)
+            m_snake_pos.z -= 0.05f;
+
+        glm::vec3 headScale(0.08f, 0.1f, 0.2f);
+        glm::vec3 headTranslation = m_snake_pos;
+        glm::mat4 trans_axis_to_side_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, -1.0));
+        glm::mat4 trans_axis_to_side_back_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, 1.0));
+
+        glm::vec3 headToBody(0.0f, 0.0f, 2.0f);
+        glm::mat4 trans_headToBody = glm::translate(glm::mat4(1.0f), headToBody);
+
+        glm::mat4 headScaleMatrix = glm::scale(glm::mat4(1.0f), headScale);
+        glm::mat4 headTranslationMatrix = glm::translate(glm::mat4(1.0f), headTranslation);
+        if (m_head_rotationAngle >= 45.0f || m_head_rotationAngle <= -45.0f)
+        {
+            m_head_rotationDirection *= -1;
+        }
+        m_head_rotationAngle += float(m_head_rotationDirection);
+        // std::cout << m_head_rotationAngle << std::endl;
+        glm::mat4 rotz_1 = glm::rotate(glm::mat4(1.0f), glm::radians(m_head_rotationAngle), glm::vec3(0, 1, 0));
+        glm::mat4 headModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
+
+        const glm::mat4 headMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * headModelMatrix;
+        const glm::mat3 headScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(headModelMatrix));
+        renderMesh("default", "cube", headModelMatrix);
+
+        glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
+        int rot_dir = -1;
+
+        for (int i = 0; i < m_numBodySegments; ++i)
+        {
+            // add random angle to body rotation
+            /*std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_real_distribution<float> dist(0.5f, 2.0f);
+            float randomNumber = dist(gen);*/
+            glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(rot_dir * m_head_rotationAngle * 1.2f), glm::vec3(0, 1, 0));
+            glm::mat4 bodyModelMatrix = lastModelMatrix * trans_headToBody * rotz_2;
+            lastModelMatrix = bodyModelMatrix;
+            rot_dir *= -1;
+
+            // Render the current body segment
+            const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
+            const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
+            renderMesh("default", "cube", bodyModelMatrix);
+        }
+    }
+
+    void renderFlame() {
+        // render flame
+        for (int i = 0; i < MAX_PARTICLES; i++) {
+            glm::vec3 particleScale = glm::vec3(0.004f, 0.005f, 0.004f);
+            glm::mat4 particleScaleMatrix = glm::scale(glm::mat4(1.0f), particleScale);
+            glm::vec3 particleTranslation = m_fire[i].pos;
+            glm::mat4 particleTranslationMatrix = glm::translate(glm::mat4(1.0f), particleTranslation);
+            glm::mat4 particleModelMatrix = particleTranslationMatrix * particleScaleMatrix;
+            //glEnable(GL_BLEND); // Enable blending.
+            //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+            renderMesh("fire", "cube", particleModelMatrix, std::nullopt, std::nullopt, m_fire[i].color);
+            //glDisable(GL_BLEND);
+        }
+        // update particles
+        updateFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.5, 0.6, 1.5));
+    }
+
+    void renderBulb(glm::mat4 mvpMatrix) {
+        if (m_move_bulb_right)
+            m_bulbPos.z += 0.02f;
+        if (m_move_bulb_left)
+            m_bulbPos.z -= 0.02f;
+        if (m_move_bulb_down)
+            m_bulbPos.y -= 0.02f;
+        if (m_move_bulb_up)
+            m_bulbPos.y += 0.02f;
+        if (m_move_bulb_in)
+            m_bulbPos.x += 0.02f;
+        if (m_move_bulb_out)
+            m_bulbPos.x -= 0.02f;
+        const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_bulbPos, 1.0f);
+        const glm::vec3 color{ 0, 1, 0 };
+
+        glPointSize(20.0f);
+        glUniform4fv(0, 1, glm::value_ptr(screenPos));
+        glUniform3fv(1, 1, glm::value_ptr(color));
+        glDrawArrays(GL_POINTS, 0, 1);
     }
 
 
@@ -688,6 +701,9 @@ private:
     Player m_player;
     int m_previousCameraMode{ 0 };
     int m_cameraMode{ 0 }; // 0 = freecam, 1 = top down, 2 = 3rd person
+
+    // Whether or not normal mapping is enabled
+    bool m_enableNormalMapping = false;
 
 
     // Bezier Variables
