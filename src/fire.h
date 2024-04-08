@@ -12,10 +12,10 @@ DISABLE_WARNINGS_POP()
 
 // define colors
 #define WHITE glm::vec3(1.0f, 1.0f, 1.0f)
-#define BLUE glm::vec3(0.0f, 0.0f, 1.0f)
+#define BLUE glm::vec3(0.5f, 0.0f, 0.5f)
 #define YELLOW glm::vec3(1.0f, 1.0f, 0.0f)
 #define ORANGE glm::vec3(1.0f, 0.5f, 0.0f)
-#define RED glm::vec3(1.0f, 0.1f, 0.0f)
+#define RED glm::vec3(1.0f, 0.0f, 0.0f)
 
 typedef struct {
 	bool	active;

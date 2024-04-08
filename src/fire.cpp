@@ -44,8 +44,17 @@ void updateFire(Particle m_fire[], int size, const glm::vec3& minBounds, const g
             else {
                 m_fire[i].acceleration.x = 0.0f;
             }
-            // TODO: limit shape of the fire
-            if (m_fire[i].pos.y > 2 * maxBounds.y) m_fire[i].life = 0.0f;
+            if ((m_fire[i].pos.z > baseFire.z) && (m_fire[i].pos.y > (0.1 + baseFire.y))) {
+                m_fire[i].acceleration.z = -0.3f;
+            }
+            else if ((m_fire[i].pos.z < baseFire.z) && (m_fire[i].pos.y > (0.1 + baseFire.y))) {
+                m_fire[i].acceleration.z = 0.3f;
+            }
+            else {
+                m_fire[i].acceleration.z = 0.0f;
+            }
+            // limit shape of the fire
+            if (m_fire[i].pos.y - minBounds.y > maxBounds.y - minBounds.y + 0.05) m_fire[i].life = 0.0f;
             m_fire[i].speed += m_fire[i].acceleration;
             m_fire[i].life -= m_fire[i].fade;
             if (m_fire[i].life < 0.0f) {

@@ -221,7 +221,7 @@ public:
             const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_blist[i], 1.0f);
             const glm::vec3 color{1, 0, 0};
 
-            glPointSize(15.0f);
+            glPointSize(10.0f);
             glUniform4fv(0, 1, glm::value_ptr(screenPos));
             glUniform3fv(1, 1, glm::value_ptr(color));
             glDrawArrays(GL_POINTS, 0, 1);
@@ -316,15 +316,15 @@ public:
         else if (m_flame && m_flame_init) {
             // render flame
             for (int i = 0; i < MAX_PARTICLES; i++) {
-                glm::vec3 particleScale = glm::vec3(0.002f, 0.002f, 0.002f);
+                glm::vec3 particleScale = glm::vec3(0.004f, 0.005f, 0.004f);
                 glm::mat4 particleScaleMatrix = glm::scale(glm::mat4(1.0f), particleScale);
                 glm::vec3 particleTranslation = m_fire[i].pos;
                 glm::mat4 particleTranslationMatrix = glm::translate(glm::mat4(1.0f), particleTranslation);
                 glm::mat4 particleModelMatrix = particleTranslationMatrix * particleScaleMatrix;
-                glEnable(GL_BLEND); // Enable blending.
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+                //glEnable(GL_BLEND); // Enable blending.
+                //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
                 renderMesh("fire", "cube", particleModelMatrix, std::nullopt, m_fire[i].color);
-                glDisable(GL_BLEND);
+                //glDisable(GL_BLEND);
             }
             // update particles
             updateFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.5, 0.6, 1.5));
