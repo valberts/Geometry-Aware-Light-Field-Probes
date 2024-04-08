@@ -92,7 +92,8 @@ public:
     {
         m_textureManager->loadTexture("checkerboard", "resources/checkerboard.png");
         m_textureManager->loadTexture("cube", "resources/texture.png");
-        m_textureManager->loadTexture("floor", "resources/floor.png");
+        m_textureManager->loadTexture("floor_diffuse", "resources/floor_diffuse.png");
+        m_textureManager->loadTexture("floor_normal", "resources/floor_normal.png");
     }
 
     void update()
@@ -192,18 +193,18 @@ public:
         glDepthMask(GL_TRUE);
         glDepthFunc(GL_LEQUAL);
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        renderMesh("default", "floor", glm::mat4(1.0f), "floor");
+        renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
         renderMesh("default", "dragon", m_player.getMatrix());
 
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Enable color writes.
         glEnable(GL_BLEND); // Enable blending.
         glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-        renderMesh("default", "floor", glm::mat4(1.0f), "floor");
+        renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
         renderMesh("default", "dragon", m_player.getMatrix());
         if (m_enableBulb) {
 
             renderMesh("bulb", "dragon", m_player.getMatrix());
-            renderMesh("bulb", "floor", glm::mat4(1.0f), "floor");
+            renderMesh("bulb", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
         }
         glDisable(GL_BLEND);
         
@@ -323,7 +324,7 @@ public:
                 glm::mat4 particleModelMatrix = particleTranslationMatrix * particleScaleMatrix;
                 //glEnable(GL_BLEND); // Enable blending.
                 //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-                renderMesh("fire", "cube", particleModelMatrix, std::nullopt, m_fire[i].color);
+                renderMesh("fire", "cube", particleModelMatrix, std::nullopt, std::nullopt, m_fire[i].color);
                 //glDisable(GL_BLEND);
             }
             // update particles
@@ -338,48 +339,68 @@ public:
     }
 
     /**
-     * Renders a mesh with specified shader, transformation matrices, and an optional texture.
+     * Renders a mesh with specified shader, transformation matrices, and optional textures.
      *
      * @param shaderName The name of the shader to use for rendering.
      * @param meshName The name of the mesh to render.
      * @param modelMatrix The Model matrix for transforming the mesh.
-     * @param textureName (Optional) The name of the texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
+     * @param textureName (Optional) The name of the diffuse texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
+     * @param normalMapName (Optional) The name of the normal map to apply to the mesh. If not provided, normal mapping is not used.
+     * @param inputColor (Optional) Color to use for managing flame color.
      */
-    void renderMesh(const std::string &shaderName,
-                    const std::string &meshName,
-                    const glm::mat4 &modelMatrix,
-                    const std::optional<std::string> &textureName = std::nullopt,
-                    const std::optional<glm::vec3> &inputColor = std::nullopt) // add this for managing flame color
+    void renderMesh(const std::string& shaderName,
+        const std::string& meshName,
+        const glm::mat4& modelMatrix,
+        const std::optional<std::string>& textureName = std::nullopt,
+        const std::optional<std::string>& normalMapName = std::nullopt,
+        const std::optional<glm::vec3>& inputColor = std::nullopt)
     {
-        auto &meshes = m_meshManager->getMeshes(meshName);
+        auto& meshes = m_meshManager->getMeshes(meshName);
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
         // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
-        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
+        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(modelMatrix));
 
-        for (auto &mesh : meshes)
+        for (auto& mesh : meshes)
         {
-            Shader &shader = m_shaderManager->getShader(shaderName);
+            Shader& shader = m_shaderManager->getShader(shaderName);
             shader.bind();
 
             glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
             glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
             glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
 
-            if (mesh.hasTextureCoords() && textureName.has_value())
+            bool hasDiffuseTexture = mesh.hasTextureCoords() && textureName.has_value();
+            bool hasNormalMap = mesh.hasTextureCoords() && normalMapName.has_value();
+
+            // Diffuse texture
+            if (hasDiffuseTexture)
             {
-                Texture *texture = m_textureManager->getTexture(*textureName);
+                Texture* texture = m_textureManager->getTexture(*textureName);
                 texture->bind(GL_TEXTURE0);
-                glUniform1i(3, 0);
+                glUniform1i(3, 0); // Texture unit 0
                 glUniform1i(4, GL_TRUE);
-                glUniform1i(5, GL_FALSE);
-                glUniform1i(6, m_shadingMode);
             }
             else
             {
                 glUniform1i(4, GL_FALSE);
-                glUniform1i(5, m_useMaterial);
-                glUniform1i(6, m_shadingMode);
             }
+
+            // Normal map
+            if (hasNormalMap)
+            {
+                Texture* normalMap = m_textureManager->getTexture(*normalMapName);
+                normalMap->bind(GL_TEXTURE1); 
+                glUniform1i(11, 1); 
+                glUniform1i(12, GL_TRUE); 
+            }
+            else
+            {
+                glUniform1i(12, GL_FALSE); // Disable normal mapping in the shader
+            }
+
+            glUniform1i(5, m_useMaterial);
+            glUniform1i(6, m_shadingMode);
+
             if (shaderName == "default") {
                 glUniform3fv(7, 1, glm::value_ptr(m_defaultLightPos));
                 glUniform1i(9, m_night);
@@ -391,9 +412,11 @@ public:
             else if (shaderName == "fire") {
                 glUniform3fv(10, 1, glm::value_ptr(*inputColor));
             }
+
             mesh.draw(shader);
         }
     }
+
 
     // In here you can handle key presses
     // key - Integer that corresponds to numbers in https://www.glfw.org/docs/latest/group__keys.html
