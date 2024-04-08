@@ -27,20 +27,21 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 
 For example: (but we can come up with any others)
 - [x] (Hazel) Move at constant speed along Bézier curve (Cam move, predefined bezier, 3 curves)
-- [ ] Particle effects (explosions, magic spells, fire)
+- [ ] (Hazel) Particle effects (explosions, magic spells, fire)
 - [x] (Hazel) Point-lights like torches or light bulbs (color and pos changeable)
+- [ ] (Hazel) Spot-lights, shadow mapping
 - [ ] The illusion of an infinite terrain by adding new tiles on the fly
-- [ ] Post-processing effects
+- [ ] (Hazel) Post-processing effects
 - [ ] Procedurally generated terrains
 - [ ] Water surfaces that are procedurally generated (produce a vertex grid and move the vertices according to a combination of several sinus functions that you can evaluate in the vertex shader).
 - [ ] Animated textures (by switching textures frame to frame)
 - [ ] Zoom effects / perspective changes
-- [x] (Hazel) Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
+- [x] (Hazel) (Really simple, will improve) Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
 - [ ] A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
 - [ ] Collision between the player and objects
 - [ ] Generate a maze or dungeon for the player to move through
 - [ ] Generate environment props like procedural buildings
-- [ ] Inverse kinematics
+- [ ] (Hazel) Inverse kinematics
 
 ## Grading
 
