@@ -28,6 +28,7 @@ DISABLE_WARNINGS_POP()
 #include "managers.cpp"
 #include "player.cpp"
 #include "fire.h"
+#include <stb/stb_image.h>
 
 class Application
 {
@@ -52,6 +53,7 @@ public:
         setupShaders();
         loadMeshes();
         loadTextures();
+        setupSkybox();
     }
 
     void setupShaders()
@@ -60,11 +62,9 @@ public:
         {
             m_shaderManager->loadShader("default", {{GL_VERTEX_SHADER, "shaders/default_vert.glsl"},
                                                     {GL_FRAGMENT_SHADER, "shaders/default_frag.glsl"}});
-
+            m_shaderManager->loadShader("skybox", { {GL_VERTEX_SHADER, "shaders/skybox_vert.glsl"},
+                                        {GL_FRAGMENT_SHADER, "shaders/skybox_frag.glsl"} });
             m_shaderManager->loadShader("shadow", {{GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}});
-
-            m_shaderManager->loadShader("light", {{GL_VERTEX_SHADER, "shaders/light_vertex.glsl"},
-                                                  {GL_FRAGMENT_SHADER, "shaders/light_frag.glsl"}});
             m_shaderManager->loadShader("fire", { {GL_VERTEX_SHADER, "shaders/fire_vert.glsl"},
                                                   {GL_FRAGMENT_SHADER, "shaders/fire_frag.glsl"} });
             m_shaderManager->loadShader("point", { {GL_VERTEX_SHADER, "shaders/point_vert.glsl"},
@@ -109,6 +109,113 @@ public:
         m_textureManager->loadTexture("gold_roughness", "resources/gold/gold_roughness.png");
     }
 
+    // https://github.com/VictorGordan/opengl-tutorials/tree/main/YoutubeOpenGL%2019%20-%20Cubemaps%20%26%20Skyboxes
+    // https://www.youtube.com/watch?v=8sVvxeKI9Pk OpenGL Tutorial 19 - Cubemaps & Skyboxes
+    void setupSkybox() {
+        float skyboxVertices[] =
+        {
+            //   Coordinates
+            -1.0f, -1.0f,  1.0f,//        7--------6
+             1.0f, -1.0f,  1.0f,//       /|       /|
+             1.0f, -1.0f, -1.0f,//      4--------5 |
+            -1.0f, -1.0f, -1.0f,//      | |      | |
+            -1.0f,  1.0f,  1.0f,//      | 3------|-2
+             1.0f,  1.0f,  1.0f,//      |/       |/
+             1.0f,  1.0f, -1.0f,//      0--------1
+            -1.0f,  1.0f, -1.0f
+        };
+
+        unsigned int skyboxIndices[] =
+        {
+            // Right
+            1, 2, 6,
+            6, 5, 1,
+            // Left
+            0, 4, 7,
+            7, 3, 0,
+            // Top
+            4, 5, 6,
+            6, 7, 4,
+            // Bottom
+            0, 3, 2,
+            2, 1, 0,
+            // Back
+            0, 1, 5,
+            5, 4, 0,
+            // Front
+            3, 7, 6,
+            6, 2, 3
+        };
+
+        // Create VAO, VBO, and EBO for the skybox
+        glGenVertexArrays(1, &skyboxVAO);
+        glGenBuffers(1, &skyboxVBO);
+        glGenBuffers(1, &skyboxEBO);
+        glBindVertexArray(skyboxVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyboxEBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skyboxIndices), &skyboxIndices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        // All the faces of the cubemap (make sure they are in this exact order)
+        std::string facesCubemap[6] =
+        {
+            "resources/skybox/right.jpg",
+            "resources/skybox/left.jpg",
+            "resources/skybox/top.jpg",
+            "resources/skybox/bottom.jpg",
+            "resources/skybox/front.jpg",
+            "resources/skybox/back.jpg"
+        };
+
+        // Creates the cubemap texture object
+        glGenTextures(1, &cubemapTexture);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        // These are very important to prevent seams
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        // This might help with seams on some systems
+        //glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
+        // Cycles through all the textures and attaches them to the cubemap object
+        for (unsigned int i = 0; i < 6; i++)
+        {
+            int width, height, nrChannels;
+            unsigned char* data = stbi_load(facesCubemap[i].c_str(), &width, &height, &nrChannels, 0);
+            if (data)
+            {
+                stbi_set_flip_vertically_on_load(false);
+                glTexImage2D
+                (
+                    GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                    0,
+                    GL_RGB,
+                    width,
+                    height,
+                    0,
+                    GL_RGB,
+                    GL_UNSIGNED_BYTE,
+                    data
+                );
+                stbi_image_free(data);
+            }
+            else
+            {
+                std::cout << "Failed to load texture: " << facesCubemap[i] << std::endl;
+                stbi_image_free(data);
+            }
+        }
+
+    }
+
     void update()
     {
         while (!m_window.shouldClose())
@@ -133,8 +240,9 @@ public:
         ImGui::Begin("Window");
         ImGui::InputInt("Camera mode", &m_cameraMode);
         ImGui::Checkbox("Normal Mapping", &m_enableNormalMapping);
-        ImGui::Checkbox("Use material if no texture", &m_useMaterial);
+        //ImGui::Checkbox("Use material if no texture", &m_useMaterial);
 
+        ImGui::Checkbox("Skybox", &m_renderSkybox);
         ImGui::Checkbox("Night Time", &m_night);
         ImGui::Checkbox("Light a flame", &m_flame);
 
@@ -231,6 +339,11 @@ public:
         //renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
         //renderMesh("default", "dragon", m_player.getMatrix());
         //glDisable(GL_BLEND);
+
+        // Render skybox
+        if (m_renderSkybox) {
+            renderSkybox();
+        }
 
         // Render a point for the location of the point light
         renderPoint(m_lightPos, m_lightColor);
@@ -385,6 +498,31 @@ public:
 
             mesh.draw(shader);
         }
+    }
+
+    void renderSkybox() {
+        // Since the cubemap will always have a depth of 1.0, we need that equal sign so it doesn't get discarded
+        glDepthFunc(GL_LEQUAL);
+
+        Shader& skyboxShader = m_shaderManager->getShader("skybox");
+        skyboxShader.bind();
+        glm::mat4 viewMatrix = glm::mat4(1.0f);
+        // We make the mat4 into a mat3 and then a mat4 again in order to get rid of the last row and column
+        // The last row and column affect the translation of the skybox (which we don't want to affect)
+        viewMatrix = glm::mat4(glm::mat3(m_camera.viewMatrix()));
+        glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(m_projectionMatrix));
+        glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+
+        // Draws the cubemap as the last object so we can save a bit of performance by discarding all fragments
+        // where an object is present (a depth of 1.0f will always fail against any object's depth value)
+        glBindVertexArray(skyboxVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+        // Switch back to the normal depth function
+        glDepthFunc(GL_LESS);
     }
 
     void renderPoint(glm::vec3 position, glm::vec3 color) {
@@ -707,16 +845,18 @@ private:
     std::unique_ptr<ShaderManager> m_shaderManager = std::make_unique<ShaderManager>();
     std::unique_ptr<TextureManager> m_textureManager = std::make_unique<TextureManager>();
 
-    bool m_useMaterial{true};
     glm::dvec2 m_mousePos;
 
-    // Player and camera variables
+    // Player object
     Player m_player;
+
+    // Options
+    bool m_enableNormalMapping = false;
     int m_previousCameraMode{ 0 };
     int m_cameraMode{ 0 }; // 0 = freecam, 1 = top down, 2 = 3rd person
-
-    // Whether or not normal mapping is enabled
-    bool m_enableNormalMapping = false;
+    bool m_useMaterial{ true };
+    bool m_renderSkybox{ false };
+    bool animateSnake{ false };             // only draw snake when true
 
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
@@ -727,6 +867,10 @@ private:
     glm::vec3 m_lightPos = glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 m_lightColor = glm::vec3(1.0f);
 
+    // Environment map variables
+    unsigned int skyboxVAO, skyboxVBO, skyboxEBO;
+    unsigned int cubemapTexture;
+
     // Bezier Variables
     std::vector<glm::vec3> m_blist; // point list for bezier
     // bool m_drawPoint{ false };
@@ -735,7 +879,6 @@ private:
     float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)
     
     // Snake variables
-    bool animateSnake{false};             // only draw snake when true
     float animationTime = 0.0f;           // Animation time
     float animationSpeed = 1.0f;          // Speed of animation
     int m_numBodySegments{5};             // num of body segements
