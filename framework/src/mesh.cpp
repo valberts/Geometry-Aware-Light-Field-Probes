@@ -116,6 +116,30 @@ std::vector<Mesh> loadMesh(const std::filesystem::path& file, bool centerAndNorm
                     mesh.vertices.push_back(vertex);
                 }
                 mesh.triangles.push_back(triangle);
+
+                // Calculate tangents and bitangents
+                glm::vec3 edge1 = v1 - v0;
+                glm::vec3 edge2 = v2 - v0;
+                glm::vec2 deltaUV1 = mesh.vertices[triangle[1]].texCoord - mesh.vertices[triangle[0]].texCoord;
+                glm::vec2 deltaUV2 = mesh.vertices[triangle[2]].texCoord - mesh.vertices[triangle[0]].texCoord;
+
+                float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+                glm::vec3 tangent;
+                tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+                tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+                tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+                tangent = glm::normalize(tangent);
+
+                // Store the tangent for each vertex of the triangle
+                for (unsigned j = 0; j < 3; j++) {
+                    mesh.vertices[triangle[j]].tangent += tangent;
+                }
+            }
+
+            // Normalize the tangents for all vertices
+            for (auto& vertex : mesh.vertices) {
+                vertex.tangent = glm::normalize(vertex.tangent);
             }
 
             const auto materialID = shape.mesh.material_ids[startTriangle];

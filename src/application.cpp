@@ -65,10 +65,11 @@ public:
 
             m_shaderManager->loadShader("light", {{GL_VERTEX_SHADER, "shaders/light_vertex.glsl"},
                                                   {GL_FRAGMENT_SHADER, "shaders/light_frag.glsl"}});
-            m_shaderManager->loadShader("bulb", { {GL_VERTEX_SHADER, "shaders/bulb_vert.glsl"},
-                                                  {GL_FRAGMENT_SHADER, "shaders/bulb_frag.glsl"} });
             m_shaderManager->loadShader("fire", { {GL_VERTEX_SHADER, "shaders/fire_vert.glsl"},
                                                   {GL_FRAGMENT_SHADER, "shaders/fire_frag.glsl"} });
+            m_shaderManager->loadShader("point", { {GL_VERTEX_SHADER, "shaders/point_vert.glsl"},
+                                      {GL_FRAGMENT_SHADER, "shaders/point_frag.glsl"} });
+
             // Any new shaders can be added below in similar fashion.
             // ==> Don't forget to reconfigure CMake when you do!
             //     Visual Studio: PROJECT => Generate Cache for ComputerGraphics
@@ -86,14 +87,26 @@ public:
         m_meshManager->loadMesh("dragon", "resources/dragon.obj");
         m_meshManager->loadMesh("cube", "resources/cube.obj");
         m_meshManager->loadMesh("floor", "resources/floor.obj");
+        m_meshManager->loadMesh("sphere", "resources/sphere.obj");
     }
 
     void loadTextures()
     {
         m_textureManager->loadTexture("checkerboard", "resources/checkerboard.png");
         m_textureManager->loadTexture("cube", "resources/texture.png");
-        m_textureManager->loadTexture("floor_diffuse", "resources/floor_diffuse.png");
+
+        m_textureManager->loadTexture("floor_albedo", "resources/floor_albedo.png");
         m_textureManager->loadTexture("floor_normal", "resources/floor_normal.png");
+
+        m_textureManager->loadTexture("metal_albedo", "resources/metal/metal_albedo.jpg");
+        m_textureManager->loadTexture("metal_normal", "resources/metal/metal_normal.jpg");
+        m_textureManager->loadTexture("metal_metallic", "resources/metal/metal_metallic.jpg");
+        m_textureManager->loadTexture("metal_roughness", "resources/metal/metal_roughness.jpg");
+
+        m_textureManager->loadTexture("gold_albedo", "resources/gold/gold_albedo.png");
+        m_textureManager->loadTexture("gold_normal", "resources/gold/gold_normal.png");
+        m_textureManager->loadTexture("gold_metallic", "resources/gold/gold_metallic.png");
+        m_textureManager->loadTexture("gold_roughness", "resources/gold/gold_roughness.png");
     }
 
     void update()
@@ -118,7 +131,6 @@ public:
 
         // Use ImGui for easy input/output of ints, floats, strings, etc...
         ImGui::Begin("Window");
-        ImGui::InputInt("Shading mode", &m_shadingMode); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
         ImGui::InputInt("Camera mode", &m_cameraMode);
         ImGui::Checkbox("Normal Mapping", &m_enableNormalMapping);
         ImGui::Checkbox("Use material if no texture", &m_useMaterial);
@@ -126,13 +138,7 @@ public:
         ImGui::Checkbox("Night Time", &m_night);
         ImGui::Checkbox("Light a flame", &m_flame);
 
-        if (ImGui::Button("Add Bulb")) {
-            m_enableBulb = true;
-        }
-
-        ImGui::ColorEdit3("Bulb Color", (float*)&m_bulbColor);
-
-        ImGui::InputInt("Snake length: %i", &m_numBodySegments);
+        ImGui::InputInt("Snake length", &m_numBodySegments);
         ImGui::Checkbox("Animate Snake", &animateSnake);
 
         if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
@@ -148,6 +154,23 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
+        // PBR Shading window
+        ImGui::End();
+        ImGui::Begin("PBR");
+        ImGui::ColorEdit3("Albedo", (float*)&m_albedo);
+        ImGui::SliderFloat("Metallic", &m_metallic, 0.0f, 1.0f);
+        ImGui::SliderFloat("Roughness", &m_roughness, 0.0f, 1.0f);
+        ImGui::End();
+
+        // Point light window
+        ImGui::Begin("Light Controls");
+        // Light Position Control
+        ImGui::Text("Light Position");
+        ImGui::DragFloat3("Position", glm::value_ptr(m_lightPos), 0.1f, -20.0f, 20.0f);
+
+        // Light Color Control
+        ImGui::Text("Light Color");
+        (ImGui::ColorEdit3("Color", glm::value_ptr(m_lightColor)));
         ImGui::End();
     }
 
@@ -192,23 +215,25 @@ public:
 
         // default depth
         glDepthMask(GL_TRUE);
-        glDepthFunc(GL_LEQUAL);
-        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
+        //glDepthFunc(GL_LEQUAL);
+        //glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        renderMesh("default", "floor", glm::mat4(1.0f), "floor_albedo", "floor_normal", std::nullopt, std::nullopt, glm::vec3(1.0), 0.0, 1.0);
+        // PBR Texture sphere
+        renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)) , "metal_albedo", "metal_normal", "metal_metallic", "metal_roughness");
+        renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)), "gold_albedo", "gold_normal", "gold_metallic", "gold_roughness");
+        // PBR sliders control material properties of dragon
         renderMesh("default", "dragon", m_player.getMatrix());
 
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Enable color writes.
-        glEnable(GL_BLEND); // Enable blending.
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-        renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
-        renderMesh("default", "dragon", m_player.getMatrix());
-        if (m_enableBulb) {
+        // Had to comment some code here to see PBR shaders
+        //glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Enable color writes.
+        //glEnable(GL_BLEND); // Enable blending.
+        //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+        //renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
+        //renderMesh("default", "dragon", m_player.getMatrix());
+        //glDisable(GL_BLEND);
 
-            renderMesh("bulb", "dragon", m_player.getMatrix());
-            renderMesh("bulb", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
-        }
-        glDisable(GL_BLEND);
-        
+        // Render a point for the location of the point light
+        renderPoint();
 
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
         // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
@@ -227,12 +252,6 @@ public:
             glUniform4fv(0, 1, glm::value_ptr(screenPos));
             glUniform3fv(1, 1, glm::value_ptr(color));
             glDrawArrays(GL_POINTS, 0, 1);
-        }
-
-        // render points -----
-        // also draw a green point for bulb position
-        if (m_enableBulb) {
-            renderBulb(mvpMatrix);
         }
 
         // Render snake (hierarchical box transform)
@@ -258,25 +277,34 @@ public:
     }
 
     /**
-     * Renders a mesh with specified shader, transformation matrices, and optional textures.
+     * Renders a mesh with specified shader, transformation matrices, and optional textures and material properties.
      *
      * @param shaderName The name of the shader to use for rendering.
      * @param meshName The name of the mesh to render.
      * @param modelMatrix The Model matrix for transforming the mesh.
      * @param textureName (Optional) The name of the diffuse texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
      * @param normalMapName (Optional) The name of the normal map to apply to the mesh. If not provided, normal mapping is not used.
-     * @param inputColor (Optional) Color to use for managing flame color.
+     * @param metallicMapName (Optional) The name of the metallic map to apply to the mesh. This enhances the metallic look on the material. If not provided, a default metallic value is used.
+     * @param roughnessMapName (Optional) The name of the roughness map to apply to the mesh. This affects the material's roughness. If not provided, a default roughness value is used.
+     * @param albedo (Optional) The albedo color of the material. Uses m_albedo if not specified.
+     * @param metallic (Optional) The metallic property of the material. Uses m_metallic if not specified. Ignored if metallicMapName is provided.
+     * @param roughness (Optional) The roughness property of the material. Uses m_roughness if not specified. Ignored if roughnessMapName is provided.
      */
-    void renderMesh(const std::string& shaderName,
+
+    void renderMesh(
+        const std::string& shaderName,
         const std::string& meshName,
         const glm::mat4& modelMatrix,
         const std::optional<std::string>& textureName = std::nullopt,
         const std::optional<std::string>& normalMapName = std::nullopt,
-        const std::optional<glm::vec3>& inputColor = std::nullopt)
+        const std::optional<std::string>& metallicMapName = std::nullopt, // Optional metallic map
+        const std::optional<std::string>& roughnessMapName = std::nullopt, // Optional roughness map
+        const std::optional<glm::vec3>& albedo = std::nullopt,
+        const std::optional<float>& metallic = std::nullopt,
+        const std::optional<float>& roughness = std::nullopt)
     {
         auto& meshes = m_meshManager->getMeshes(meshName);
         const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
-        // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
         const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(modelMatrix));
 
         for (auto& mesh : meshes)
@@ -288,11 +316,8 @@ public:
             glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
             glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
 
-            bool hasDiffuseTexture = mesh.hasTextureCoords() && textureName.has_value();
-            bool hasNormalMap = mesh.hasTextureCoords() && normalMapName.has_value();
-
-            // Diffuse texture
-            if (hasDiffuseTexture)
+            // Albedo Map
+            if (mesh.hasTextureCoords() && textureName.has_value())
             {
                 Texture* texture = m_textureManager->getTexture(*textureName);
                 texture->bind(GL_TEXTURE0);
@@ -304,36 +329,108 @@ public:
                 glUniform1i(4, GL_FALSE);
             }
 
-            // Normal map
-            if (hasNormalMap && m_enableNormalMapping)
+            // Normal Map
+            if (normalMapName.has_value() && m_enableNormalMapping)
             {
                 Texture* normalMap = m_textureManager->getTexture(*normalMapName);
-                normalMap->bind(GL_TEXTURE1); 
-                glUniform1i(11, 1); 
-                glUniform1i(12, GL_TRUE); 
+                normalMap->bind(GL_TEXTURE1);
+                glUniform1i(5, 1); // Texture unit 1
+                glUniform1i(6, GL_TRUE);
             }
             else
             {
-                glUniform1i(12, GL_FALSE); // Disable normal mapping in the shader
+                glUniform1i(6, GL_FALSE); // Disable normal mapping in the shader
             }
 
-            glUniform1i(5, m_useMaterial);
-            glUniform1i(6, m_shadingMode);
+            // Metallic Map
+            if (metallicMapName.has_value())
+            {
+                Texture* metallicMap = m_textureManager->getTexture(*metallicMapName);
+                metallicMap->bind(GL_TEXTURE2);
+                glUniform1i(7, 2); // Texture unit 2
+                glUniform1i(8, GL_TRUE);
+            }
+            else
+            {
+                glUniform1i(8, GL_FALSE);
+                // Use provided metallic value or fallback to member variable
+                float metallicValue = metallic.has_value() ? *metallic : m_metallic;
+                glUniform1f(9, metallicValue);
+            }
 
-            if (shaderName == "default") {
-                glUniform3fv(7, 1, glm::value_ptr(m_defaultLightPos));
-                glUniform1i(9, m_night);
+            // Roughness map
+            if (roughnessMapName.has_value())
+            {
+                Texture* roughnessMap = m_textureManager->getTexture(*roughnessMapName);
+                roughnessMap->bind(GL_TEXTURE3);
+                glUniform1i(10, 3); // Texture unit 3
+                glUniform1i(11, GL_TRUE);
             }
-            else if (shaderName == "bulb") {
-                glUniform3fv(7, 1, glm::value_ptr(m_bulbPos));
-                glUniform3fv(8, 1, glm::value_ptr(m_bulbColor));
+            else
+            {
+                glUniform1i(11, GL_FALSE);
+                // Use provided roughness value or fallback to member variable
+                float roughnessValue = roughness.has_value() ? *roughness : m_roughness;
+                glUniform1f(12, roughnessValue);
             }
-            else if (shaderName == "fire") {
-                glUniform3fv(10, 1, glm::value_ptr(*inputColor));
+
+            // Albedo
+            if (albedo.has_value())
+            {
+                glUniform3fv(13, 1, glm::value_ptr(*albedo));
             }
+            else
+            {
+                glUniform3fv(13, 1, glm::value_ptr(m_albedo));
+            }
+
+            glUniform1i(14, m_useMaterial);
+            glUniform3fv(15, 1, glm::value_ptr(m_lightPos));
+            glUniform3fv(16, 1, glm::value_ptr(m_lightColor));
+            glUniform3fv(17, 1, glm::value_ptr(m_camera.cameraPos()));
+
+            // Use provided albedo, metallic, and roughness values or default to member variables
+            glUniform3fv(13, 1, albedo.has_value() ? glm::value_ptr(*albedo) : glm::value_ptr(m_albedo));
+            glUniform1f(9, metallic.has_value() ? *metallic : m_metallic);
+            glUniform1f(12, roughness.has_value() ? *roughness : m_roughness);
+            glUniform1i(20, m_night);
 
             mesh.draw(shader);
         }
+    }
+
+    void renderPoint() {
+        glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f); // White light
+        Shader& pointShader = m_shaderManager->getShader("point");
+        pointShader.bind();
+        glm::mat4 modelMatrix = glm::translate(glm::mat4(1.0f), m_lightPos);
+        glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(m_projectionMatrix * m_camera.viewMatrix() * modelMatrix));
+        glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+        glUniform3fv(2, 1, glm::value_ptr(m_lightColor));
+
+        glPointSize(10.0f);
+
+        // Now draw the point at the light's position
+        GLfloat lightPos[] = { m_lightPos.x, m_lightPos.y, m_lightPos.z };
+        GLuint VAO, VBO;
+        glGenVertexArrays(1, &VAO);
+        glBindVertexArray(VAO);
+
+        glGenBuffers(1, &VBO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(lightPos), lightPos, GL_STATIC_DRAW);
+
+        // Since you're directly passing array, no need to bind buffer here
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (void*)lightPos);
+        glEnableVertexAttribArray(0);
+
+        glDrawArrays(GL_POINTS, 0, 1);
+
+        // Clean up
+        glDisableVertexAttribArray(0);
+        glBindVertexArray(0);
+        glDeleteVertexArrays(1, &VAO);
+        glDeleteBuffers(1, &VBO);
     }
 
     void renderSnake() {
@@ -401,35 +498,36 @@ public:
             glm::mat4 particleModelMatrix = particleTranslationMatrix * particleScaleMatrix;
             //glEnable(GL_BLEND); // Enable blending.
             //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-            renderMesh("fire", "cube", particleModelMatrix, std::nullopt, std::nullopt, m_fire[i].color);
+            renderParticle("fire", "cube", particleModelMatrix, m_fire[i].color);
             //glDisable(GL_BLEND);
         }
         // update particles
         updateFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.5, 0.6, 1.5));
     }
 
-    void renderBulb(glm::mat4 mvpMatrix) {
-        if (m_move_bulb_right)
-            m_bulbPos.z += 0.02f;
-        if (m_move_bulb_left)
-            m_bulbPos.z -= 0.02f;
-        if (m_move_bulb_down)
-            m_bulbPos.y -= 0.02f;
-        if (m_move_bulb_up)
-            m_bulbPos.y += 0.02f;
-        if (m_move_bulb_in)
-            m_bulbPos.x += 0.02f;
-        if (m_move_bulb_out)
-            m_bulbPos.x -= 0.02f;
-        const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_bulbPos, 1.0f);
-        const glm::vec3 color{ 0, 1, 0 };
+    void renderParticle(const std::string& shaderName,
+        const std::string& meshName,
+        const glm::mat4& modelMatrix,
+        const std::optional<glm::vec3>& inputColor = std::nullopt)
+    {
+        auto& meshes = m_meshManager->getMeshes(meshName);
+        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
+        // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
+        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(modelMatrix));
 
-        glPointSize(20.0f);
-        glUniform4fv(0, 1, glm::value_ptr(screenPos));
-        glUniform3fv(1, 1, glm::value_ptr(color));
-        glDrawArrays(GL_POINTS, 0, 1);
+        for (auto& mesh : meshes)
+        {
+            Shader& shader = m_shaderManager->getShader(shaderName);
+            shader.bind();
+
+            glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
+            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+            glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
+            glUniform3fv(3, 1, glm::value_ptr(*inputColor));
+
+            mesh.draw(shader);
+        }
     }
-
 
     // In here you can handle key presses
     // key - Integer that corresponds to numbers in https://www.glfw.org/docs/latest/group__keys.html
@@ -453,65 +551,27 @@ public:
                 break;
             }
         }
-        if (!m_leftShiftPressed) {
-            switch (key)
-            {
-                // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
-            case GLFW_KEY_RIGHT:
-                m_move_right = true;
-                break;
-            case GLFW_KEY_LEFT:
-                m_move_left = true;
-                break;
-            case GLFW_KEY_DOWN:
-                m_move_down = true;
-                break;
-            case GLFW_KEY_UP:
-                m_move_up = true;
-                break;
-            case GLFW_KEY_ESCAPE:
-                m_window.close();
-                exit(0);
-                break;
-            case GLFW_KEY_LEFT_SHIFT:
-                m_leftShiftPressed = true;
-                break;
-            default:
-                break;
-            }
-        }
-        else {
-            switch (key)
-            {
-                // use UP DOWN LEFT RIGHT PGUP PGDOWN to move the light bulb
-            case GLFW_KEY_RIGHT:
-                m_move_bulb_right = true;
-                break;
-            case GLFW_KEY_LEFT:
-                m_move_bulb_left = true;
-                break;
-            case GLFW_KEY_DOWN:
-                m_move_bulb_down = true;
-                break;
-            case GLFW_KEY_UP:
-                m_move_bulb_up = true;
-                break;
-            case GLFW_KEY_PAGE_UP:
-                m_move_bulb_in = true;
-                break;
-            case GLFW_KEY_PAGE_DOWN:
-                m_move_bulb_out = true;
-                break;
-            case GLFW_KEY_ESCAPE:
-                m_window.close();
-                exit(0);
-                break;
-            case GLFW_KEY_LEFT_SHIFT:
-                m_leftShiftPressed = true;
-                break;
-            default:
-                break;
-            }
+        switch (key)
+        {
+            // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
+        case GLFW_KEY_RIGHT:
+            m_move_right = true;
+            break;
+        case GLFW_KEY_LEFT:
+            m_move_left = true;
+            break;
+        case GLFW_KEY_DOWN:
+            m_move_down = true;
+            break;
+        case GLFW_KEY_UP:
+            m_move_up = true;
+            break;
+        case GLFW_KEY_ESCAPE:
+            m_window.close();
+            exit(0);
+            break;
+        default:
+            break;
         }
         std::cout << "Key pressed: " << key << std::endl;
     }
@@ -538,40 +598,7 @@ public:
                     break;
             }
         }
-        switch (key)
-        {
-            // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
-        case GLFW_KEY_RIGHT:
-            m_move_right = false;
-            m_move_bulb_right = false;
-            break;
-        case GLFW_KEY_LEFT:
-            m_move_left = false;
-            m_move_bulb_left = false;
-            break;
-        case GLFW_KEY_DOWN:
-            m_move_down = false;
-            m_move_bulb_down = false;
-            break;
-        case GLFW_KEY_UP:
-            m_move_up = false;
-            m_move_bulb_up = false;
-            break;
-        case GLFW_KEY_PAGE_UP:
-            m_move_up = false;
-            m_move_bulb_in = false;
-            break;
-        case GLFW_KEY_PAGE_DOWN:
-            m_move_up = false;
-            m_move_bulb_out = false;
-            break;
-        case GLFW_KEY_LEFT_SHIFT:
-            m_leftShiftPressed = false;
-            break;
-        default:
-            std::cout << "Key released: " << key << std::endl;
-            break;
-        }
+        std::cout << "Key released: " << key << std::endl;
     }
 
     // If the mouse is moved this function will be called with the x, y screen-coordinates of the mouse
@@ -694,7 +721,6 @@ private:
     std::unique_ptr<TextureManager> m_textureManager = std::make_unique<TextureManager>();
 
     bool m_useMaterial{true};
-    int m_shadingMode{0}; // how to shade the model, 0 = diffuse
     glm::dvec2 m_mousePos;
 
     // Player and camera variables
@@ -705,6 +731,14 @@ private:
     // Whether or not normal mapping is enabled
     bool m_enableNormalMapping = false;
 
+    // PBR variable
+    glm::vec3 m_albedo = glm::vec3(1.0f);
+    float m_metallic = 0.0f;
+    float m_roughness = 0.0f;
+
+    // Light variables
+    glm::vec3 m_lightPos = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 m_lightColor = glm::vec3(1.0f);
 
     // Bezier Variables
     std::vector<glm::vec3> m_blist; // point list for bezier
@@ -712,6 +746,8 @@ private:
     bool isCameraMoving = false;
     float cameraMovementTime = 0.0f;      // Time elapsed during camera movement
     float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)
+    
+    // Snake variables
     bool animateSnake{false};             // only draw snake when true
     float animationTime = 0.0f;           // Animation time
     float animationSpeed = 1.0f;          // Speed of animation
@@ -723,18 +759,7 @@ private:
     bool m_move_left = false;
     bool m_move_down = false;
     bool m_move_up = false;
-    // bulb pos control
-    bool m_move_bulb_right = false;
-    bool m_move_bulb_left = false;
-    bool m_move_bulb_up = false;
-    bool m_move_bulb_down = false;
-    bool m_move_bulb_in = false;
-    bool m_move_bulb_out = false;
-    glm::vec3 m_bulbColor = glm::vec3(0.5, 0.5, 0.5);
-    glm::vec3 m_bulbPos = glm::vec3(0.5, 0.5, 0.5);
-    bool m_enableBulb = false;
-    glm::vec3 m_defaultLightPos = glm::vec3(0.0f, 10.0f, 10.0f);
-    bool m_leftShiftPressed = false;
+
     bool m_night { false };
     bool m_flame { false };
     bool m_flame_init = false;

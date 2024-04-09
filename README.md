@@ -16,8 +16,8 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 ## Minimal features:
 
 - [x] (Vincent) Multiple viewpoints. For example, a top view and a third-person camera that follows a character. The position and movement of the camera is up to you. You can also create a cutscene to add new viewpoints.
-- [ ] (Vincent) Advanced shading: include more complex material models, such as PBR shaders.
-- [ ] Material textures: e.g., kd, ks, shininess, roughness.
+- [x] (Vincent) Advanced shading: include more complex material models, such as PBR shaders.
+- [x] (Vincent) Material textures: e.g., kd, ks, shininess, roughness.
 - [x] (Vincent) Normal mapping.
 - [ ] Environment mapping.
 - [x] (Hazel) Smooth paths: at least one feature of your demo should make use of smooth paths using Bézier curves. It can be the movement of a model, a light source, or a camera. Use a path composed of at least three Cubic Bézier curves.
@@ -28,7 +28,7 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 For example: (but we can come up with any others)
 - [x] (Hazel) Move at constant speed along Bézier curve (Cam move, predefined bezier, 3 curves)
 - [x] (Hazel) Particle effects (explosions, magic spells, fire) (Simple flame)
-- [x] (Hazel) Point-lights like torches or light bulbs (color and pos changeable)
+- [x] (Hazel & Vincent) Point-lights like torches or light bulbs (color and pos changeable)
 - [ ] (Hazel) Spotlight
 - [ ] The illusion of an infinite terrain by adding new tiles on the fly
 - [ ] (Hazel) Post-processing effects
