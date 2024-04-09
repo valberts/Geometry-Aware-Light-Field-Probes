@@ -25,7 +25,10 @@ layout(location = 16) uniform vec3 lightColor;
 layout(location = 17) uniform vec3 cameraPosition;
 layout(location = 18) uniform float ao = 1.0f;
 
-layout(location = 20) uniform bool night;
+layout(location = 19) uniform samplerCube irradianceMap;
+layout(location = 20) uniform bool useIrradianceMap;
+
+layout(location = 30) uniform bool night;
 
 in vec3 fragPosition;
 in vec3 fragNormal;
@@ -40,6 +43,11 @@ float PI = 3.14159265359;
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
+
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}   
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a      = roughness*roughness;
@@ -104,7 +112,7 @@ void main()
     // Fresnel
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, fragAlbedo, actualMetallic);
-    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+    vec3 F = fresnelSchlickRoughness(max(dot(H, V), 0.0), F0, actualRoughness);
     vec3 F0_metallic = mix(vec3(0.04), fragAlbedo, actualMetallic);
 
     float NDF = DistributionGGX(N, H, actualRoughness);       
@@ -123,13 +131,21 @@ void main()
     vec3 outgoing = (kD * fragAlbedo / PI + specular) * radiance * NdotL;
 
     // Ambient lighting
-    vec3 ambient = vec3(0.03) * fragAlbedo * ao;
-    vec3 color = ambient + outgoing;
+    vec3 irradiance = vec3(0.05);
+    if (useIrradianceMap) {
+        irradiance = texture(irradianceMap, N).rgb;
+        //fragColor = vec4(irradiance, 1.0); // debug irradiance
+        //return;
+    }
 
     // Night mode
     if (night) {
-        color *= 0.3;
+        irradiance *= 0.01;
     }
+
+    vec3 diffuse    = irradiance * fragAlbedo;
+    vec3 ambient    = (kD * diffuse) * ao; 
+    vec3 color = ambient + outgoing;
 
     // HDR tonemapping and gamma correction
     color = color / (color + vec3(1.0));

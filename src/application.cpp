@@ -30,6 +30,7 @@ DISABLE_WARNINGS_POP()
 #include "fire.h"
 #include <stb/stb_image.h>
 
+
 class Application
 {
 public:
@@ -53,7 +54,10 @@ public:
         setupShaders();
         loadMeshes();
         loadTextures();
-        setupSkybox();
+        loadHDR();
+        setupCubemap();
+        setupIrradiance();
+
     }
 
     void setupShaders()
@@ -64,6 +68,10 @@ public:
                                                     {GL_FRAGMENT_SHADER, "shaders/default_frag.glsl"}});
             m_shaderManager->loadShader("skybox", { {GL_VERTEX_SHADER, "shaders/skybox_vert.glsl"},
                                         {GL_FRAGMENT_SHADER, "shaders/skybox_frag.glsl"} });
+            m_shaderManager->loadShader("cubemap", { {GL_VERTEX_SHADER, "shaders/cubemap_vert.glsl"},
+                            {GL_FRAGMENT_SHADER, "shaders/cubemap_frag.glsl"} });
+            m_shaderManager->loadShader("irradiance", { {GL_VERTEX_SHADER, "shaders/skybox_vert.glsl"},
+                            {GL_FRAGMENT_SHADER, "shaders/irradiance_frag.glsl"} });
             m_shaderManager->loadShader("shadow", {{GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}});
             m_shaderManager->loadShader("fire", { {GL_VERTEX_SHADER, "shaders/fire_vert.glsl"},
                                                   {GL_FRAGMENT_SHADER, "shaders/fire_frag.glsl"} });
@@ -87,7 +95,7 @@ public:
         m_meshManager->loadMesh("dragon", "resources/dragon.obj");
         m_meshManager->loadMesh("cube", "resources/cube.obj");
         m_meshManager->loadMesh("floor", "resources/floor.obj");
-        m_meshManager->loadMesh("sphere", "resources/sphere.obj");
+        m_meshManager->loadMesh("sphere", "resources/sphere_highpoly.obj");
     }
 
     void loadTextures()
@@ -95,125 +103,167 @@ public:
         m_textureManager->loadTexture("checkerboard", "resources/checkerboard.png");
         m_textureManager->loadTexture("cube", "resources/texture.png");
 
+        // https://www.poliigon.com/texture/large-concrete-panels-texture/7856
         m_textureManager->loadTexture("floor_albedo", "resources/floor_albedo.png");
         m_textureManager->loadTexture("floor_normal", "resources/floor_normal.png");
+
 
         m_textureManager->loadTexture("metal_albedo", "resources/metal/metal_albedo.jpg");
         m_textureManager->loadTexture("metal_normal", "resources/metal/metal_normal.jpg");
         m_textureManager->loadTexture("metal_metallic", "resources/metal/metal_metallic.jpg");
         m_textureManager->loadTexture("metal_roughness", "resources/metal/metal_roughness.jpg");
 
+        // https://www.poliigon.com/texture/gold-paint-metal-texture/7253
         m_textureManager->loadTexture("gold_albedo", "resources/gold/gold_albedo.png");
         m_textureManager->loadTexture("gold_normal", "resources/gold/gold_normal.png");
         m_textureManager->loadTexture("gold_metallic", "resources/gold/gold_metallic.png");
         m_textureManager->loadTexture("gold_roughness", "resources/gold/gold_roughness.png");
+
+        // https://www.poliigon.com/texture/exterior-painted-stucco-texture-red/7805
+        m_textureManager->loadTexture("stucco_albedo", "resources/stucco/stucco_albedo.png");
+        m_textureManager->loadTexture("stucco_normal", "resources/stucco/stucco_normal.png");
+        m_textureManager->loadTexture("stucco_metallic", "resources/stucco/stucco_metallic.png");
+        m_textureManager->loadTexture("stucco_roughness", "resources/stucco/stucco_roughness.png");
     }
 
-    // https://github.com/VictorGordan/opengl-tutorials/tree/main/YoutubeOpenGL%2019%20-%20Cubemaps%20%26%20Skyboxes
-    // https://www.youtube.com/watch?v=8sVvxeKI9Pk OpenGL Tutorial 19 - Cubemaps & Skyboxes
-    void setupSkybox() {
-        float skyboxVertices[] =
+    // https://learnopengl.com/PBR/IBL/Diffuse-irradiance
+    // pbr: load the HDR environment map
+    // ---------------------------------
+    void loadHDR() {
+        stbi_set_flip_vertically_on_load(true);
+        int width, height, nrComponents;
+        float* data = stbi_loadf("resources/room.hdr", &width, &height, &nrComponents, 0);
+        if (data)
         {
-            //   Coordinates
-            -1.0f, -1.0f,  1.0f,//        7--------6
-             1.0f, -1.0f,  1.0f,//       /|       /|
-             1.0f, -1.0f, -1.0f,//      4--------5 |
-            -1.0f, -1.0f, -1.0f,//      | |      | |
-            -1.0f,  1.0f,  1.0f,//      | 3------|-2
-             1.0f,  1.0f,  1.0f,//      |/       |/
-             1.0f,  1.0f, -1.0f,//      0--------1
-            -1.0f,  1.0f, -1.0f
-        };
+            glGenTextures(1, &hdrTexture);
+            glBindTexture(GL_TEXTURE_2D, hdrTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, data); // note how we specify the texture's data value to be float
 
-        unsigned int skyboxIndices[] =
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            stbi_image_free(data);
+        }
+        else
         {
-            // Right
-            1, 2, 6,
-            6, 5, 1,
-            // Left
-            0, 4, 7,
-            7, 3, 0,
-            // Top
-            4, 5, 6,
-            6, 7, 4,
-            // Bottom
-            0, 3, 2,
-            2, 1, 0,
-            // Back
-            0, 1, 5,
-            5, 4, 0,
-            // Front
-            3, 7, 6,
-            6, 2, 3
-        };
+            std::cout << "Failed to load HDR image." << std::endl;
+        }
+    }
 
-        // Create VAO, VBO, and EBO for the skybox
-        glGenVertexArrays(1, &skyboxVAO);
-        glGenBuffers(1, &skyboxVBO);
-        glGenBuffers(1, &skyboxEBO);
-        glBindVertexArray(skyboxVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyboxEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skyboxIndices), &skyboxIndices, GL_STATIC_DRAW);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    // pbr: setup cubemap to render to and attach to framebuffer
+    // ---------------------------------------------------------
+    void setupCubemap() {
+        glGenFramebuffers(1, &captureFBO);
+        glGenRenderbuffers(1, &captureRBO);
 
-        // All the faces of the cubemap (make sure they are in this exact order)
-        std::string facesCubemap[6] =
+        glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
+
+        glGenTextures(1, &envCubemap);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+        for (unsigned int i = 0; i < 6; ++i)
         {
-            "resources/skybox/right.jpg",
-            "resources/skybox/left.jpg",
-            "resources/skybox/top.jpg",
-            "resources/skybox/bottom.jpg",
-            "resources/skybox/front.jpg",
-            "resources/skybox/back.jpg"
-        };
-
-        // Creates the cubemap texture object
-        glGenTextures(1, &cubemapTexture);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        // These are very important to prevent seams
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 512, 512, 0, GL_RGB, GL_FLOAT, nullptr);
+        }
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-        // This might help with seams on some systems
-        //glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        // Cycles through all the textures and attaches them to the cubemap object
-        for (unsigned int i = 0; i < 6; i++)
+        // pbr: set up projection and view matrices for capturing data onto the 6 cubemap face directions
+        // ----------------------------------------------------------------------------------------------
+        glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+        glm::mat4 captureViews[] =
         {
-            int width, height, nrChannels;
-            unsigned char* data = stbi_load(facesCubemap[i].c_str(), &width, &height, &nrChannels, 0);
-            if (data)
-            {
-                stbi_set_flip_vertically_on_load(false);
-                glTexImage2D
-                (
-                    GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-                    0,
-                    GL_RGB,
-                    width,
-                    height,
-                    0,
-                    GL_RGB,
-                    GL_UNSIGNED_BYTE,
-                    data
-                );
-                stbi_image_free(data);
-            }
-            else
-            {
-                std::cout << "Failed to load texture: " << facesCubemap[i] << std::endl;
-                stbi_image_free(data);
-            }
-        }
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+        };
 
+        // pbr: convert HDR equirectangular environment map to cubemap equivalent
+        // ----------------------------------------------------------------------
+        Shader& cubemapShader = m_shaderManager->getShader("cubemap");
+        cubemapShader.bind();
+
+        glUniform1i(2, 0);
+        glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(captureProjection));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, hdrTexture);
+
+        glViewport(0, 0, 512, 512); // don't forget to configure the viewport to the capture dimensions.
+        glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+        for (unsigned int i = 0; i < 6; ++i)
+        {
+            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(captureViews[i]));
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, envCubemap, 0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            renderCube();
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    // pbr: setup irradiance
+    void setupIrradiance() {
+        glGenTextures(1, &irradianceMap);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+        for (unsigned int i = 0; i < 6; ++i)
+        {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 32, 32, 0,
+                GL_RGB, GL_FLOAT, nullptr);
+        }
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 32, 32);
+
+        // pbr: set up projection and view matrices for capturing data onto the 6 cubemap face directions
+        // ----------------------------------------------------------------------------------------------
+        glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+        glm::mat4 captureViews[] =
+        {
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+        };
+
+        Shader& irradianceShader = m_shaderManager->getShader("irradiance");
+        irradianceShader.bind();
+        glUniform1i(2, 0);
+        glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(captureProjection));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+
+        glViewport(0, 0, 32, 32); // don't forget to configure the viewport to the capture dimensions.
+        glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+        for (unsigned int i = 0; i < 6; ++i)
+        {
+            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(captureViews[i]));
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, irradianceMap, 0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            renderCube();
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // reset viewport size
+        glViewport(0, 0, 1024, 1024);
     }
 
     void update()
@@ -329,6 +379,7 @@ public:
         // PBR Texture sphere
         renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)) , "metal_albedo", "metal_normal", "metal_metallic", "metal_roughness");
         renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)), "gold_albedo", "gold_normal", "gold_metallic", "gold_roughness");
+        renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 5.0)), "stucco_albedo", "stucco_normal", "stucco_metallic", "stucco_roughness");
         // PBR sliders control material properties of dragon
         renderMesh("default", "dragon", m_player.getMatrix());
 
@@ -339,11 +390,6 @@ public:
         //renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
         //renderMesh("default", "dragon", m_player.getMatrix());
         //glDisable(GL_BLEND);
-
-        // Render skybox
-        if (m_renderSkybox) {
-            renderSkybox();
-        }
 
         // Render a point for the location of the point light
         renderPoint(m_lightPos, m_lightColor);
@@ -371,6 +417,11 @@ public:
         }
         else if (!m_flame) {
             m_flame_init = false;
+        }
+
+        // Render skybox
+        if (m_renderSkybox) {
+            renderSkybox();
         }
 
         // Processes input and swaps the window buffer
@@ -494,10 +545,95 @@ public:
             glUniform3fv(13, 1, albedo.has_value() ? glm::value_ptr(*albedo) : glm::value_ptr(m_albedo));
             glUniform1f(9, metallic.has_value() ? *metallic : m_metallic);
             glUniform1f(12, roughness.has_value() ? *roughness : m_roughness);
-            glUniform1i(20, m_night);
+
+            // Environment mapping irradiance
+            if (m_renderSkybox) {
+                glActiveTexture(GL_TEXTURE4);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+                glUniform1i(19, 4); // Texture unit 4
+                glUniform1i(20, GL_TRUE);
+            }
+            else {
+                glUniform1i(20, GL_FALSE);
+            }
+
+            glUniform1i(30, m_night);
 
             mesh.draw(shader);
         }
+    }
+
+    // renderCube() renders a 1x1 3D cube in NDC.
+    // -------------------------------------------------
+    void renderCube()
+    {
+        // initialize (if necessary)
+        if (cubeVAO == 0)
+        {
+            float vertices[] = {
+                // back face
+                -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+                    1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+                    1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f, // bottom-right         
+                    1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+                -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+                -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f, // top-left
+                // front face
+                -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+                    1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f, // bottom-right
+                    1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+                    1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+                -1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f, // top-left
+                -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+                // left face
+                -1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+                -1.0f,  1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-left
+                -1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+                -1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+                -1.0f, -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+                -1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+                // right face
+                    1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+                    1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+                    1.0f,  1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-right         
+                    1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+                    1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+                    1.0f, -1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-left     
+                    // bottom face
+                    -1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+                    1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f, // top-left
+                    1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+                    1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+                    -1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+                    -1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+                    // top face
+                    -1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+                    1.0f,  1.0f , 1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+                    1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f, // top-right     
+                    1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+                    -1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+                    -1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f  // bottom-left        
+            };
+            glGenVertexArrays(1, &cubeVAO);
+            glGenBuffers(1, &cubeVBO);
+            // fill buffer
+            glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+            // link vertex attributes
+            glBindVertexArray(cubeVAO);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+        }
+        // render Cube
+        glBindVertexArray(cubeVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
     }
 
     void renderSkybox() {
@@ -512,14 +648,15 @@ public:
         viewMatrix = glm::mat4(glm::mat3(m_camera.viewMatrix()));
         glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(m_projectionMatrix));
         glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        glUniform1i(3, m_night);
 
         // Draws the cubemap as the last object so we can save a bit of performance by discarding all fragments
         // where an object is present (a depth of 1.0f will always fail against any object's depth value)
-        glBindVertexArray(skyboxVAO);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);;
+        //glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap); // display irradiance map
+        
+        renderCube();
 
         // Switch back to the normal depth function
         glDepthFunc(GL_LESS);
@@ -855,8 +992,10 @@ private:
     int m_previousCameraMode{ 0 };
     int m_cameraMode{ 0 }; // 0 = freecam, 1 = top down, 2 = 3rd person
     bool m_useMaterial{ true };
-    bool m_renderSkybox{ false };
+    bool m_renderSkybox{ true };
     bool animateSnake{ false };             // only draw snake when true
+    bool m_night{ false };
+    bool m_flame{ false };
 
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
@@ -868,8 +1007,13 @@ private:
     glm::vec3 m_lightColor = glm::vec3(1.0f);
 
     // Environment map variables
-    unsigned int skyboxVAO, skyboxVBO, skyboxEBO;
-    unsigned int cubemapTexture;
+    unsigned int captureFBO;
+    unsigned int captureRBO;
+    unsigned int hdrTexture;
+    unsigned int envCubemap;
+    unsigned int irradianceMap;
+    unsigned int cubeVAO = 0;
+    unsigned int cubeVBO = 0;
 
     // Bezier Variables
     std::vector<glm::vec3> m_blist; // point list for bezier
@@ -890,8 +1034,6 @@ private:
     bool m_move_down = false;
     bool m_move_up = false;
 
-    bool m_night { false };
-    bool m_flame { false };
     bool m_flame_init = false;
     Particle m_fire[MAX_PARTICLES];
 
