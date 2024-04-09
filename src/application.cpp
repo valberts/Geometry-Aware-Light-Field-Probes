@@ -233,25 +233,13 @@ public:
         //glDisable(GL_BLEND);
 
         // Render a point for the location of the point light
-        renderPoint();
+        renderPoint(m_lightPos, m_lightColor);
 
-        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * m_modelMatrix;
-        // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
-        // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
-        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
-
-        // Render points ----
-        Shader &lightShader = m_shaderManager->getShader("light");
-        lightShader.bind();
-        for (int i = 0; i < m_blist.size(); i++)
-        {
-            const glm::vec4 screenPos = mvpMatrix * glm::vec4(m_blist[i], 1.0f);
-            const glm::vec3 color{1, 0, 0};
-
-            glPointSize(10.0f);
-            glUniform4fv(0, 1, glm::value_ptr(screenPos));
-            glUniform3fv(1, 1, glm::value_ptr(color));
-            glDrawArrays(GL_POINTS, 0, 1);
+        // Render point for bezier curve
+        if (!m_blist.empty()) {
+            for (const auto& point : m_blist) {
+                renderPoint(point, glm::vec3(1.0, 0.0, 0.0));
+            }
         }
 
         // Render snake (hierarchical box transform)
@@ -399,14 +387,13 @@ public:
         }
     }
 
-    void renderPoint() {
-        glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f); // White light
+    void renderPoint(glm::vec3 position, glm::vec3 color) {
         Shader& pointShader = m_shaderManager->getShader("point");
         pointShader.bind();
-        glm::mat4 modelMatrix = glm::translate(glm::mat4(1.0f), m_lightPos);
+        glm::mat4 modelMatrix = glm::translate(glm::mat4(1.0f), position);
         glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(m_projectionMatrix * m_camera.viewMatrix() * modelMatrix));
         glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
-        glUniform3fv(2, 1, glm::value_ptr(m_lightColor));
+        glUniform3fv(2, 1, glm::value_ptr(color));
 
         glPointSize(10.0f);
 
