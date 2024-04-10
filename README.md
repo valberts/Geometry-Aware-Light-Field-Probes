@@ -18,7 +18,7 @@ press R mouse to add points, then click "Start Camera Motion" to animate camera 
 - [x] (Vincent) Multiple viewpoints. For example, a top view and a third-person camera that follows a character. The position and movement of the camera is up to you. You can also create a cutscene to add new viewpoints.
 - [x] (Vincent) Advanced shading: include more complex material models, such as PBR shaders.
 - [x] (Vincent) Material textures: e.g., kd, ks, shininess, roughness.
-- [x] (Vincent) Normal mapping.
+- [x] (Qinxin & Vincent) Normal mapping.
 - [x] (Qinxin & Vincent) Environment mapping.
 - [x] (Hazel) Smooth paths: at least one feature of your demo should make use of smooth paths using Bézier curves. It can be the movement of a model, a light source, or a camera. Use a path composed of at least three Cubic Bézier curves.
 - [x] (Hazel) Hierarchical transformations: include one object with several animated components. This should be done in code, not imported from Blender. Practical examples are robot arm, snake, solar system, vehicle composed of multiple parts
@@ -34,11 +34,11 @@ For example: (but we can come up with any others)
 - [ ] (Hazel) Post-processing effects
 - [ ] Procedurally generated terrains
 - [ ] Water surfaces that are procedurally generated (produce a vertex grid and move the vertices according to a combination of several sinus functions that you can evaluate in the vertex shader).
-- [ ] Animated textures (by switching textures frame to frame)
-- [ ] Zoom effects / perspective changes
+- [ ] (Qinxin) Animated textures (by switching textures frame to frame)
+- [x] (Qinxin) Zoom effects / perspective changes
 - [x] (Hazel & Vincent) (Really simple, will improve) Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
 - [ ] (Vincent) A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
-- [ ] Collision between the player and objects
+- [ ] (Qinxin) Collision between the player and objects
 - [ ] Generate a maze or dungeon for the player to move through
 - [ ] Generate environment props like procedural buildings
 - [ ] (Hazel) Inverse kinematics
