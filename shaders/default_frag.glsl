@@ -1,4 +1,4 @@
-﻿#version 450
+#version 450
 
 layout(std140) uniform Material // Must match the GPUMaterial defined in src/mesh.h
 {
