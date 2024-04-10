@@ -29,7 +29,6 @@ For example: (but we can come up with any others)
 - [x] (Hazel) Move at constant speed along Bézier curve (Cam move, predefined bezier, 3 curves)
 - [x] (Hazel) Particle effects (explosions, magic spells, fire) (Simple flame)
 - [x] (Hazel & Vincent) Point-lights like torches or light bulbs (color and pos changeable)
-- [ ] (Hazel) Spotlight
 - [ ] The illusion of an infinite terrain by adding new tiles on the fly
 - [ ] (Hazel) Post-processing effects
 - [ ] Procedurally generated terrains
@@ -41,7 +40,7 @@ For example: (but we can come up with any others)
 - [ ] (Qinxin) Collision between the player and objects
 - [ ] Generate a maze or dungeon for the player to move through
 - [ ] Generate environment props like procedural buildings
-- [ ] (Hazel) Inverse kinematics
+- [x] (Hazel) Inverse kinematics
 
 ## Grading
 
