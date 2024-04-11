@@ -423,6 +423,14 @@ public:
             m_camera.setPosition(cameraPosition);
             m_camera.setForward(glm::normalize(m_player.getPosition() - cameraPosition));
             m_camera.setUp(glm::vec3(0, 0, -1));
+            if (m_player.getPosition().x >= 2 && m_player.getPosition().x <= 4 && m_player.getPosition().z >= -1.0 && m_player.getPosition().z <= 1)
+            {
+                m_isCollude = true;
+            }
+            else
+            {
+                m_isCollude = false;
+            }
         }
         else if (m_cameraMode == 2) { // set the camera in 3rd person mode
             glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 2, 2);
@@ -1126,7 +1134,15 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyPressed(int key, int mods)
     {
-        if (m_cameraMode != 0) {
+        if (m_cameraMode != 0){
+            if (m_player.getPosition().x >= 2 && m_player.getPosition().x <= 4 && m_player.getPosition().z >= -1.0 && m_player.getPosition().z <= 1)
+            {
+                m_collusion = true;
+            }
+            else
+            {
+				m_collusion = false;
+			}
             glm::vec3 playerDirection = m_player.getDirection();
             switch (key) {
             case GLFW_KEY_W:
@@ -1136,10 +1152,24 @@ public:
                 m_player.setDirection(playerDirection + glm::vec3(0.0f, 0.0f, 1.0f)); // Move backward
                 break;
             case GLFW_KEY_A:
-                m_player.setDirection(playerDirection + glm::vec3(-1.0f, 0.0f, 0.0f)); // Move left
+                if (!m_collusion && !m_isCollude) {
+                    m_player.setDirection(playerDirection + glm::vec3(-1.0f, 0.0f, 0.0f));
+                }
+                else
+                {
+                    m_player.setDirection(playerDirection); // Move left
+                }
+                //m_player.setDirection(playerDirection + glm::vec3(-1.0f, 0.0f, 0.0f)); // Move left
                 break;
             case GLFW_KEY_D:
-                m_player.setDirection(playerDirection + glm::vec3(1.0f, 0.0f, 0.0f)); // Move right
+                if (!m_collusion && !m_isCollude) {
+                    m_player.setDirection(playerDirection + glm::vec3(1.0f, 0.0f, 0.0f));
+                }
+                else
+                {
+                    m_player.setDirection(playerDirection); // Move left
+                }
+                //m_player.setDirection(playerDirection + glm::vec3(1.0f, 0.0f, 0.0f)); // Move left
                 break;
             }
         }
@@ -1168,13 +1198,14 @@ public:
         std::cout << "Key pressed: " << key << std::endl;
     }
 
+    
     // In here you can handle key releases
     // key - Integer that corresponds to numbers in https://www.glfw.org/docs/latest/group__keys.html
     // mods - Any modifier keys pressed, like shift or control
     void onKeyReleased(int key, int mods)
     {
         if (m_cameraMode != 0) {
-            glm::vec3 playerDirection = m_player.getDirection();
+            glm::vec3 playerDirection = m_player.getDirection(); 
             switch (key) {
                 case GLFW_KEY_W:
                     m_player.setDirection(playerDirection - glm::vec3(0.0f, 0.0f, -1.0f)); // Stop moving forward
@@ -1183,10 +1214,24 @@ public:
                     m_player.setDirection(playerDirection - glm::vec3(0.0f, 0.0f, 1.0f)); // Stop moving backward
                     break;
                 case GLFW_KEY_A:
-                    m_player.setDirection(playerDirection - glm::vec3(-1.0f, 0.0f, 0.0f)); // Stop moving left
+                    if (!m_collusion) {
+                        m_player.setDirection(playerDirection - glm::vec3(-1.0f, 0.0f, 0.0f));
+                    }
+                    else
+                    {
+                        m_player.setDirection(playerDirection); // Move left
+                    }
+                    //m_player.setDirection(playerDirection - glm::vec3(-1.0f, 0.0f, 0.0f)); // Move left
                     break;
                 case GLFW_KEY_D:
-                    m_player.setDirection(playerDirection - glm::vec3(1.0f, 0.0f, 0.0f)); // Stop moving right
+                    if (!m_collusion) {
+                        m_player.setDirection(playerDirection - glm::vec3(1.0f, 0.0f, 0.0f));
+                    }
+                    else
+                    {
+                        m_player.setDirection(playerDirection); // Move left
+                    }
+                    //m_player.setDirection(playerDirection - glm::vec3(1.0f, 0.0f, 0.0f)); // Move left
                     break;
             }
         }
@@ -1352,6 +1397,8 @@ private:
     bool animateTexture{ false };             // only draw flame when true
     bool m_night{ false };
     bool m_flame{ false };
+    bool m_collusion{ false };
+    bool m_isCollude{ false };
 
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
