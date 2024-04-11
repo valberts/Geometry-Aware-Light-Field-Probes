@@ -20,10 +20,14 @@ public:
 
     Texture& operator=(const Texture&) = delete;
     Texture& operator=(Texture&&) = default;
+    GLuint getID() const {
+        return textureID; // Assuming textureID is the member variable storing the OpenGL texture ID
+    }
 
     void bind(GLint textureSlot);
 
 private:
     static constexpr GLuint INVALID = 0xFFFFFFFF;
     GLuint m_texture { INVALID };
+    GLuint textureID;
 };
