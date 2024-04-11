@@ -45,10 +45,15 @@ class TextureManager {
 public:
     TextureManager() = default; 
 
-    void loadTexture(const std::string& name, const std::filesystem::path& filepath) {
-        textures[name] = std::make_unique<Texture>(filepath);
-    }
 
+    GLuint loadTexture(const std::string& name, const std::filesystem::path& filepath) {
+        auto texture = std::make_unique<Texture>(filepath);
+        GLuint id = texture->getID();
+        textures[name] = std::move(texture);
+        textureIDs[name] = id; // Store the ID in a separate map
+        return id; // Return the OpenGL texture ID
+    }
+    
     Texture* getTexture(const std::string& name) {
         auto it = textures.find(name);
         if (it != textures.end()) {
@@ -57,6 +62,16 @@ public:
         return nullptr;
     }
 
+    GLuint getTextureID(const std::string& name) const {
+        auto it = textureIDs.find(name);
+        if (it != textureIDs.end()) {
+            return it->second; // This returns a GLuint directly from the map.
+        }
+        return 0;
+    }
+
 private:
     std::unordered_map<std::string, std::unique_ptr<Texture>> textures;
+    std::unordered_map<std::string, GLuint> textureIDs;
+
 };

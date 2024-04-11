@@ -28,8 +28,8 @@ DISABLE_WARNINGS_POP()
 #include "managers.cpp"
 #include "player.cpp"
 #include "fire.h"
-#include "inversek.h"
 #include <stb/stb_image.h>
+#include <map>
 
 
 class Application
@@ -102,8 +102,9 @@ public:
     void loadTextures()
     {
         m_textureManager->loadTexture("checkerboard", "resources/checkerboard.png");
+        m_textureManager->loadTexture("grass", "resources/grass.jpg");
+        m_textureManager->loadTexture("archi", "resources/archi.jpg");
         m_textureManager->loadTexture("cube", "resources/texture.png");
-
         // https://www.poliigon.com/texture/large-concrete-panels-texture/7856
         m_textureManager->loadTexture("floor_albedo", "resources/floor_albedo.png");
         m_textureManager->loadTexture("floor_normal", "resources/floor_normal.png");
@@ -299,6 +300,7 @@ public:
 
         ImGui::InputInt("Snake length", &m_numBodySegments);
         ImGui::Checkbox("Animate Snake", &animateSnake);
+        ImGui::Checkbox("Animate Texture", &animateTexture);
         ImGui::DragFloat3("Robot Arm Position", glm::value_ptr(armPosEnd), 0.1f, -20.0f, 20.0f);
         if (glm::length(armPosEnd - armPosOrigin) > 3) {
             armPosEnd = glm::vec3(1.0f, 1.0f, 1.5f);
@@ -351,6 +353,7 @@ public:
             m_camera.setPosition(glm::vec3(-1.0f, 0.2f, -0.5f));
             m_camera.setForward(glm::vec3(1.0f, 0.0f, 0.4f));
             m_camera.setUp(glm::vec3(0, 1, 0));
+
         } else if (m_cameraMode == 1) { // set the camera in top down mode
             glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 5, 0);
             m_camera.setPosition(cameraPosition);
@@ -380,14 +383,65 @@ public:
         glDepthMask(GL_TRUE);
         //glDepthFunc(GL_LEQUAL);
         //glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        renderMesh("default", "floor", glm::mat4(1.0f), "floor_albedo", "floor_normal", std::nullopt, std::nullopt, glm::vec3(1.0), 0.0, 1.0);
-        // PBR Texture sphere
-        renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)) , "metal_albedo", "metal_normal", "metal_metallic", "metal_roughness");
-        renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)), "gold_albedo", "gold_normal", "gold_metallic", "gold_roughness");
-        renderMesh("default", "sphere", glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 5.0)), "stucco_albedo", "stucco_normal", "stucco_metallic", "stucco_roughness");
-        // PBR sliders control material properties of dragon
-        renderMesh("default", "dragon", m_player.getMatrix());
 
+        // Floor
+        RenderMeshOptions floorOptions{
+            .shaderName = "default",
+            .meshName = "floor",
+            .modelMatrix = glm::mat4(1.0f), // Identity matrix
+            .textureName = "floor_albedo",
+            .normalMapName = "floor_normal",
+            .albedo = glm::vec3(1.0),
+            .metallic = 0.0f,
+            .roughness = 1.0f
+        };
+        renderMesh(floorOptions);
+
+        // PBR Texture Sphere - Metal
+        RenderMeshOptions metalSphereOptions{
+            .shaderName = "default",
+            .meshName = "sphere",
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)),
+            .textureName = "metal_albedo",
+            .normalMapName = "metal_normal",
+            .metallicMapName = "metal_metallic",
+            .roughnessMapName = "metal_roughness"
+        };
+        renderMesh(metalSphereOptions);
+
+        // PBR Texture Sphere - Gold
+        RenderMeshOptions goldSphereOptions{
+            .shaderName = "default",
+            .meshName = "sphere",
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)),
+            .textureName = "gold_albedo",
+            .normalMapName = "gold_normal",
+            .metallicMapName = "gold_metallic",
+            .roughnessMapName = "gold_roughness"
+        };
+        renderMesh(goldSphereOptions);
+
+        // PBR Texture Sphere - Stucco
+        RenderMeshOptions stuccoSphereOptions{
+            .shaderName = "default",
+            .meshName = "sphere",
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 5.0)),
+            .textureName = "stucco_albedo",
+            .normalMapName = "stucco_normal",
+            .metallicMapName = "stucco_metallic",
+            .roughnessMapName = "stucco_roughness"
+        };
+        renderMesh(stuccoSphereOptions);
+
+        // Dragon with Animated Textures
+        RenderMeshOptions dragonOptions{
+            .shaderName = "default",
+            .meshName = "dragon",
+            .modelMatrix = m_player.getMatrix(),
+            .animateTextures = std::list<std::string>{"checkerboard", "grass", "archi"}
+        };
+
+        renderMesh(dragonOptions);
         // Had to comment some code here to see PBR shaders
         //glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Enable color writes.
         //glEnable(GL_BLEND); // Enable blending.
@@ -411,11 +465,6 @@ public:
         if (animateSnake) {
             renderSnake();
         }
-
-        renderRobotArm();
-        // Render a point for the location of the destination of robot arm
-        renderPoint(armPosEnd, glm::vec3(0.0f, 1.0f, 0.5f));
-        renderPoint(armPosOrigin, glm::vec3(0.0f, 1.0f, 0.5f));
 
         // init fire (only run once)
         if (m_flame && !m_flame_init) {
@@ -452,49 +501,64 @@ public:
      * @param metallic (Optional) The metallic property of the material. Uses m_metallic if not specified. Ignored if metallicMapName is provided.
      * @param roughness (Optional) The roughness property of the material. Uses m_roughness if not specified. Ignored if roughnessMapName is provided.
      */
-
-    void renderMesh(
-        const std::string& shaderName,
-        const std::string& meshName,
-        const glm::mat4& modelMatrix,
-        const std::optional<std::string>& textureName = std::nullopt,
-        const std::optional<std::string>& normalMapName = std::nullopt,
-        const std::optional<std::string>& metallicMapName = std::nullopt, // Optional metallic map
-        const std::optional<std::string>& roughnessMapName = std::nullopt, // Optional roughness map
-        const std::optional<glm::vec3>& albedo = std::nullopt,
-        const std::optional<float>& metallic = std::nullopt,
-        const std::optional<float>& roughness = std::nullopt)
+    struct RenderMeshOptions {
+        std::string shaderName;
+        std::string meshName;
+        glm::mat4 modelMatrix;
+        std::optional<std::string> textureName = std::nullopt;
+        std::optional<std::string> normalMapName = std::nullopt;
+        std::optional<std::string> metallicMapName = std::nullopt;
+        std::optional<std::string> roughnessMapName = std::nullopt;
+        std::optional<glm::vec3> albedo = std::nullopt;
+        std::optional<float> metallic = std::nullopt;
+        std::optional<float> roughness = std::nullopt;
+        std::optional<std::list<std::string>> animateTextures = std::nullopt;
+    };
+    void renderMesh(const RenderMeshOptions& options)
     {
-        auto& meshes = m_meshManager->getMeshes(meshName);
-        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
-        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(modelMatrix));
+        auto& meshes = m_meshManager->getMeshes(options.meshName);
+        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * options.modelMatrix;
+        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(options.modelMatrix));
 
         for (auto& mesh : meshes)
         {
-            Shader& shader = m_shaderManager->getShader(shaderName);
+            Shader& shader = m_shaderManager->getShader(options.shaderName);
             shader.bind();
 
             glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(options.modelMatrix));
             glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
 
             // Albedo Map
-            if (mesh.hasTextureCoords() && textureName.has_value())
+            if (mesh.hasTextureCoords() && options.textureName.has_value()&& !animateTexture)
             {
-                Texture* texture = m_textureManager->getTexture(*textureName);
+                Texture* texture = m_textureManager->getTexture(*options.textureName);
                 texture->bind(GL_TEXTURE0);
                 glUniform1i(3, 0); // Texture unit 0
                 glUniform1i(4, GL_TRUE);
             }
+            else if (options.animateTextures.has_value() && animateTexture) {
+                Texture* texture = m_textureManager->getTexture(textures.front());
+				texture->bind(GL_TEXTURE0);
+				glUniform1i(3, 0); // Texture unit 0
+				glUniform1i(4, GL_TRUE);
+                timer += 0.1f;
+                if (timer > 5.0f) {
+					textures.pop_front();
+					textures.push_back(textures.front());
+                    glFinish();
+					timer = 0.0f;
+				}
+			}
             else
             {
                 glUniform1i(4, GL_FALSE);
             }
 
             // Normal Map
-            if (normalMapName.has_value() && m_enableNormalMapping)
+            if (options.normalMapName.has_value() && m_enableNormalMapping)
             {
-                Texture* normalMap = m_textureManager->getTexture(*normalMapName);
+                Texture* normalMap = m_textureManager->getTexture(*options.normalMapName);
                 normalMap->bind(GL_TEXTURE1);
                 glUniform1i(5, 1); // Texture unit 1
                 glUniform1i(6, GL_TRUE);
@@ -505,9 +569,9 @@ public:
             }
 
             // Metallic Map
-            if (metallicMapName.has_value())
+            if (options.metallicMapName.has_value())
             {
-                Texture* metallicMap = m_textureManager->getTexture(*metallicMapName);
+                Texture* metallicMap = m_textureManager->getTexture(*options.metallicMapName);
                 metallicMap->bind(GL_TEXTURE2);
                 glUniform1i(7, 2); // Texture unit 2
                 glUniform1i(8, GL_TRUE);
@@ -516,14 +580,14 @@ public:
             {
                 glUniform1i(8, GL_FALSE);
                 // Use provided metallic value or fallback to member variable
-                float metallicValue = metallic.has_value() ? *metallic : m_metallic;
+                float metallicValue = options.metallic.has_value() ? *options.metallic : m_metallic;
                 glUniform1f(9, metallicValue);
             }
 
             // Roughness map
-            if (roughnessMapName.has_value())
+            if (options.roughnessMapName.has_value())
             {
-                Texture* roughnessMap = m_textureManager->getTexture(*roughnessMapName);
+                Texture* roughnessMap = m_textureManager->getTexture(*options.roughnessMapName);
                 roughnessMap->bind(GL_TEXTURE3);
                 glUniform1i(10, 3); // Texture unit 3
                 glUniform1i(11, GL_TRUE);
@@ -532,14 +596,14 @@ public:
             {
                 glUniform1i(11, GL_FALSE);
                 // Use provided roughness value or fallback to member variable
-                float roughnessValue = roughness.has_value() ? *roughness : m_roughness;
+                float roughnessValue = options.roughness.has_value() ? *options.roughness : m_roughness;
                 glUniform1f(12, roughnessValue);
             }
 
             // Albedo
-            if (albedo.has_value())
+            if (options.albedo.has_value())
             {
-                glUniform3fv(13, 1, glm::value_ptr(*albedo));
+                glUniform3fv(13, 1, glm::value_ptr(*options.albedo));
             }
             else
             {
@@ -552,9 +616,9 @@ public:
             glUniform3fv(17, 1, glm::value_ptr(m_camera.cameraPos()));
 
             // Use provided albedo, metallic, and roughness values or default to member variables
-            glUniform3fv(13, 1, albedo.has_value() ? glm::value_ptr(*albedo) : glm::value_ptr(m_albedo));
-            glUniform1f(9, metallic.has_value() ? *metallic : m_metallic);
-            glUniform1f(12, roughness.has_value() ? *roughness : m_roughness);
+            glUniform3fv(13, 1, options.albedo.has_value() ? glm::value_ptr(*options.albedo) : glm::value_ptr(m_albedo));
+            glUniform1f(9, options.metallic.has_value() ? *options.metallic : m_metallic);
+            glUniform1f(12, options.roughness.has_value() ? *options.roughness : m_roughness);
 
             // Environment mapping irradiance
             if (m_renderSkybox) {
@@ -775,7 +839,12 @@ public:
 
         const glm::mat4 headMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * headModelMatrix;
         const glm::mat3 headScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(headModelMatrix));
-        renderMesh("default", "cube", headModelMatrix);
+        RenderMeshOptions headSegmentOptions{
+                .shaderName = "default",
+                .meshName = "cube",
+                .modelMatrix = headModelMatrix
+        };
+        renderMesh(headSegmentOptions);
 
         glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
         int rot_dir = -1;
@@ -795,7 +864,14 @@ public:
             // Render the current body segment
             const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
             const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
-            renderMesh("default", "cube", bodyModelMatrix);
+            RenderMeshOptions bodySegmentOptions{
+                .shaderName = "default",
+                .meshName = "cube",
+                .modelMatrix = bodyModelMatrix
+            };
+
+            // Render the current body segment
+            renderMesh(bodySegmentOptions);
         }
     }
 
@@ -916,7 +992,7 @@ public:
     void onMouseMove(const glm::dvec2 &cursorPos)
     {
         m_mousePos = cursorPos;
-        std::cout << "Mouse at position: " << cursorPos.x << " " << cursorPos.y << std::endl;
+        //std::cout << "Mouse at position: " << cursorPos.x << " " << cursorPos.y << std::endl;
     }
 
     // If one of the mouse buttons is pressed this function will be called
@@ -954,7 +1030,7 @@ public:
         default:
             break;
         }
-        std::cout << "Pressed mouse button: " << button << std::endl;
+        //std::cout << "Pressed mouse button: " << button << std::endl;
     }
 
     // If one of the mouse buttons is released this function will be called
@@ -962,7 +1038,7 @@ public:
     // mods - Any modifier buttons pressed
     void onMouseReleased(int button, int mods)
     {
-        std::cout << "Released mouse button: " << button << std::endl;
+        //std::cout << "Released mouse button: " << button << std::endl;
     }
 
     // calculate a point on the Bezier curve at time t
@@ -1021,10 +1097,39 @@ public:
             m_camera.setPos(CalculateBezierPoint(p_local, cameraPosition));
         }
     }
+    
+    struct AnimationState {
+        std::list<std::string> textureNames; // Holds names of textures for the current animation
+        std::list<std::string>::iterator currentFrame; // Iterator to the current frame
+        float frameDuration; // Duration to display each frame
+    };
 
+    void updateAnimationState(AnimationState& animState, float deltaTime) {
+        if (animState.textureNames.empty()) return;
+
+        timer += deltaTime;
+        std::cout<< timer << std::endl;
+        if (timer >= animState.frameDuration) {
+            timer = 0.0f; // Reset frame time
+            // Move to the next frame, loop to the beginning if at the end
+            ++animState.currentFrame;
+            if (animState.currentFrame == animState.textureNames.end()) {
+                animState.currentFrame = animState.textureNames.begin();
+            }
+            //animState.frameTime = 0.0f;
+        }
+    }
+
+
+    
 private:
     Window m_window;
     Camera m_camera;
+
+    
+
+    
+    std::map<std::string, std::vector<GLuint>> animations;
 
     // Manager classes
     std::unique_ptr<MeshManager> m_meshManager = std::make_unique<MeshManager>();
@@ -1043,9 +1148,9 @@ private:
     bool m_useMaterial{ true };
     bool m_renderSkybox{ true };
     bool animateSnake{ false };             // only draw snake when true
+    bool animateTexture{ false };             // only draw flame when true
     bool m_night{ false };
     bool m_flame{ false };
-    bool robotArm{ false };
 
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
@@ -1095,7 +1200,10 @@ private:
     // flame variables
     bool m_flame_init = false;
     Particle m_fire[MAX_PARTICLES];
+    AnimationState animState;
 
+    float timer = 0.0f;
+    std::list<std::string> textures = std::list<std::string>{ "checkerboard", "grass", "archi" };
     // Projection and view matrices for you to fill in and use
     glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
     // glm::mat4 m_viewMatrix = glm::lookAt(glm::vec3(-1, 1, -1), glm::vec3(0), glm::vec3(0, 1, 0));
