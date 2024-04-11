@@ -135,6 +135,7 @@ public:
     void loadHDR() {
         stbi_set_flip_vertically_on_load(true);
         int width, height, nrComponents;
+        // https://hdri-haven.com/hdri/dark-room
         float* data = stbi_loadf("resources/room.hdr", &width, &height, &nrComponents, 0);
         if (data)
         {
