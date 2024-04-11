@@ -28,6 +28,7 @@ DISABLE_WARNINGS_POP()
 #include "managers.cpp"
 #include "player.cpp"
 #include "fire.h"
+#include "inversek.h"
 #include <stb/stb_image.h>
 #include <map>
 
@@ -466,6 +467,10 @@ public:
             renderSnake();
         }
 
+        renderRobotArm();
+        renderPoint(armPosOrigin, glm::vec3(0.0f, 1.0f, 0.5f));
+        renderPoint(armPosEnd, glm::vec3(0.0f, 1.0f, 0.5f));
+
         // init fire (only run once)
         if (m_flame && !m_flame_init) {
             initFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.7, 0.4, 1.3)); // TODO: let user set position range
@@ -802,10 +807,24 @@ public:
         glm::mat4 armModelMatrix3 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * armScaleMatrix;
         glm::mat4 armModelMatrix4 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * trans_armToNext * rotz_6 * trans_armToNext * armScaleMatrix;
         glm::mat4 armModelMatrix5 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * trans_armToNext * rotz_6 * trans_armToNext * trans_armToNext * rotz_7 * trans_armToNext * armScaleMatrix;
-
-        renderMesh("default", "cube", armModelMatrix3); // arm1
-        renderMesh("default", "cube", armModelMatrix4); // arm2
-        renderMesh("default", "cube", armModelMatrix5); // arm3
+        RenderMeshOptions Options1{
+                .shaderName = "default",
+                .meshName = "cube",
+                .modelMatrix = armModelMatrix3
+        };
+        RenderMeshOptions Options2{
+                .shaderName = "default",
+                .meshName = "cube",
+                .modelMatrix = armModelMatrix4
+        };
+        RenderMeshOptions Options3{
+                .shaderName = "default",
+                .meshName = "cube",
+                .modelMatrix = armModelMatrix5
+        };
+        renderMesh(Options1); // arm1
+        renderMesh(Options2); // arm2
+        renderMesh(Options3); // arm3
     }
 
     void renderSnake() {
