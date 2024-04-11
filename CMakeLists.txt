@@ -14,7 +14,7 @@ add_executable(FinalProject
     "src/application.cpp"
     "src/texture.cpp"
 	"src/mesh.cpp"
- "src/camera.h" "src/camera.cpp"  "src/managers.cpp" "src/scene.cpp"  "src/player.cpp" "src/fire.h" "src/fire.cpp")
+ "src/camera.h" "src/camera.cpp"  "src/managers.cpp" "src/scene.cpp"  "src/player.cpp" "src/fire.h" "src/fire.cpp" "src/inversek.cpp" "src/inversek.h")
 target_compile_features(FinalProject PRIVATE cxx_std_20)
 target_link_libraries(FinalProject PRIVATE CGFramework)
 enable_sanitizers(FinalProject)
