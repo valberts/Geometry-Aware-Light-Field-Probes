@@ -36,7 +36,7 @@ For example: (but we can come up with any others)
 - [x] (Qinxin) Animated textures (by switching textures frame to frame)
 - [x] (Qinxin) Zoom effects / perspective changes
 - [x] (Hazel & Vincent) (Really simple, will improve) Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
-- [ ] (Vincent) A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
+- [x] (Vincent) A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
 - [ ] (Qinxin) Collision between the player and objects
 - [ ] Generate a maze or dungeon for the player to move through
 - [ ] Generate environment props like procedural buildings
