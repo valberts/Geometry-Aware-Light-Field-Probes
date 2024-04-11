@@ -59,7 +59,9 @@ public:
         loadHDR();
         setupCubemap();
         setupIrradiance();
+        setupMinimap();
 
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
     }
 
     void setupShaders()
@@ -74,6 +76,8 @@ public:
                             {GL_FRAGMENT_SHADER, "shaders/cubemap_frag.glsl"} });
             m_shaderManager->loadShader("irradiance", { {GL_VERTEX_SHADER, "shaders/skybox_vert.glsl"},
                             {GL_FRAGMENT_SHADER, "shaders/irradiance_frag.glsl"} });
+            m_shaderManager->loadShader("minimap", { {GL_VERTEX_SHADER, "shaders/minimap_vert.glsl"},
+                {GL_FRAGMENT_SHADER, "shaders/minimap_frag.glsl"} });
             m_shaderManager->loadShader("shadow", {{GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}});
             m_shaderManager->loadShader("fire", { {GL_VERTEX_SHADER, "shaders/fire_vert.glsl"},
                                                   {GL_FRAGMENT_SHADER, "shaders/fire_frag.glsl"} });
@@ -106,6 +110,7 @@ public:
         m_textureManager->loadTexture("grass", "resources/grass.jpg");
         m_textureManager->loadTexture("archi", "resources/archi.jpg");
         m_textureManager->loadTexture("cube", "resources/texture.png");
+
         // https://www.poliigon.com/texture/large-concrete-panels-texture/7856
         m_textureManager->loadTexture("floor_albedo", "resources/floor_albedo.png");
         m_textureManager->loadTexture("floor_normal", "resources/floor_normal.png");
@@ -270,6 +275,53 @@ public:
         glViewport(0, 0, 1024, 1024);
     }
 
+    // setup minimap render to texture and display on screen
+    void setupMinimap() {
+        glCreateFramebuffers(1, &minimapFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &minimapTexture);
+        glBindTexture(GL_TEXTURE_2D, minimapTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, minimapLength, minimapLength, 0, GL_RGB, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // Setup the shader for rendering the minimap texture to a quad
+
+        float scale = 0.5f; // scale of the quad
+        // how much to translate quad to move it to the top left corner of the screen
+        float translateX = -1.0f + (scale * 1.0f);
+        float translateY = 1.0f - (scale * 1.0f);
+
+        float quadVertices[] = {
+            // positions (scaled and translated)     // texCoords
+            (-1.0f * scale + translateX),  (1.0f * scale + translateY),  0.0f, 1.0f,
+            (-1.0f * scale + translateX),  (0.0f * scale + translateY),  0.0f, 0.0f,
+            (0.0f * scale + translateX),  (0.0f * scale + translateY),  1.0f, 0.0f,
+
+            (-1.0f * scale + translateX),  (1.0f * scale + translateY),  0.0f, 1.0f,
+            (0.0f * scale + translateX),  (0.0f * scale + translateY),  1.0f, 0.0f,
+            (0.0f * scale + translateX),  (1.0f * scale + translateY),  1.0f, 1.0f
+        };
+
+        glCreateVertexArrays(1, &quadVAO);
+        glCreateBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+        // Do all minimap rendering here
+
+    }
+
     void update()
     {
         while (!m_window.shouldClose())
@@ -278,7 +330,9 @@ public:
             // Put your real-time logic and rendering in here
             processInput();
             updateScene();
-            renderScene();
+            render();
+            // Processes input and swaps the window buffer
+            m_window.swapBuffers();
         }
     }
 
@@ -297,6 +351,7 @@ public:
         //ImGui::Checkbox("Use material if no texture", &m_useMaterial);
 
         ImGui::Checkbox("Skybox", &m_renderSkybox);
+        ImGui::Checkbox("Minimap", &m_renderMinimap);
         ImGui::Checkbox("Night Time", &m_night);
         ImGui::Checkbox("Light a flame", &m_flame);
 
@@ -342,7 +397,7 @@ public:
     }
 
     void updateScene() {
-
+        
         // Move the player
         const float playerSpeed = 0.1f;
         if (glm::length(m_player.getDirection()) > 0.0f) { // if there's no movement, don't move
@@ -350,6 +405,13 @@ public:
             m_player.setMatrix(glm::translate(glm::mat4(1.0f), m_player.getPosition()));
         }
 
+        // Set minimap camera position and orientation
+        glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 10, 0);
+        minimapCamera.setPosition(cameraPosition);
+        minimapCamera.setForward(glm::normalize(m_player.getPosition() - cameraPosition));
+        minimapCamera.setUp(glm::vec3(0, 0, -1));
+
+        // Set scene camera position and orientation;
         if (m_cameraMode == 0 && m_previousCameraMode != 0) { // reset to freecam parameters
             m_player.setDirection(glm::vec3(0.0f, 0.0f, 0.0f)); // reset player direction because player input isnt updated in this camera mode
             m_camera.setPosition(glm::vec3(-1.0f, 0.2f, -0.5f));
@@ -372,10 +434,36 @@ public:
         m_previousCameraMode = m_cameraMode;
     }
 
+    void render() {
+        if (m_renderMinimap) {
+            // Render to Minimap FBO
+            glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
+            glViewport(0, 0, minimapLength, minimapLength);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Ensure depth buffer is cleared if you're using it
+            GLuint depthRBO;
+            glGenRenderbuffers(1, &depthRBO);
+            glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, minimapLength, minimapLength);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+            renderMinimapScene(); // Render the scene for the minimap here (consider using a different view or data)
+        }
+
+        // Render to Default Framebuffer (Main scene)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, m_window.getWindowSize().x, m_window.getWindowSize().y);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear main framebuffer
+        renderScene(); // Render the main scene
+
+        // Draw the Minimap on-screen
+        if (m_renderMinimap) {
+            renderMinimap();
+        }
+    }
+
     void renderScene()
     {
         // Clear the screen
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // ...
@@ -391,6 +479,7 @@ public:
             .shaderName = "default",
             .meshName = "floor",
             .modelMatrix = glm::mat4(1.0f), // Identity matrix
+            .camera = m_camera,
             .textureName = "floor_albedo",
             .normalMapName = "floor_normal",
             .albedo = glm::vec3(1.0),
@@ -404,6 +493,7 @@ public:
             .shaderName = "default",
             .meshName = "sphere",
             .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)),
+            .camera = m_camera,
             .textureName = "metal_albedo",
             .normalMapName = "metal_normal",
             .metallicMapName = "metal_metallic",
@@ -416,6 +506,7 @@ public:
             .shaderName = "default",
             .meshName = "sphere",
             .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)),
+            .camera = m_camera,
             .textureName = "gold_albedo",
             .normalMapName = "gold_normal",
             .metallicMapName = "gold_metallic",
@@ -427,7 +518,8 @@ public:
         RenderMeshOptions stuccoSphereOptions{
             .shaderName = "default",
             .meshName = "sphere",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 5.0)),
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 6.0)),
+            .camera = m_camera,
             .textureName = "stucco_albedo",
             .normalMapName = "stucco_normal",
             .metallicMapName = "stucco_metallic",
@@ -440,6 +532,7 @@ public:
             .shaderName = "default",
             .meshName = "dragon",
             .modelMatrix = m_player.getMatrix(),
+            .camera = m_camera,
             .animateTextures = std::list<std::string>{"checkerboard", "grass", "archi"}
         };
 
@@ -488,9 +581,84 @@ public:
         if (m_renderSkybox) {
             renderSkybox();
         }
+    }
 
-        // Processes input and swaps the window buffer
-        m_window.swapBuffers();
+    void renderMinimapScene() {
+        // Clear the screen
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // ...
+        glEnable(GL_DEPTH_TEST);
+
+        // default depth
+        glDepthMask(GL_TRUE);
+        //glDepthFunc(GL_LEQUAL);
+        //glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+        // Floor
+        RenderMeshOptions floorOptions{
+            .shaderName = "default",
+            .meshName = "floor",
+            .modelMatrix = glm::mat4(1.0f), // Identity matrix
+            .camera = minimapCamera,
+            .textureName = "floor_albedo",
+            .normalMapName = "floor_normal",
+            .albedo = glm::vec3(1.0),
+            .metallic = 0.0f,
+            .roughness = 1.0f
+        };
+        renderMesh(floorOptions);
+
+        // PBR Texture Sphere - Metal
+        RenderMeshOptions metalSphereOptions{
+            .shaderName = "default",
+            .meshName = "sphere",
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)),
+            .camera = minimapCamera,
+            .textureName = "metal_albedo",
+            .normalMapName = "metal_normal",
+            .metallicMapName = "metal_metallic",
+            .roughnessMapName = "metal_roughness"
+        };
+        renderMesh(metalSphereOptions);
+
+        // PBR Texture Sphere - Gold
+        RenderMeshOptions goldSphereOptions{
+            .shaderName = "default",
+            .meshName = "sphere",
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)),
+            .camera = minimapCamera,
+            .textureName = "gold_albedo",
+            .normalMapName = "gold_normal",
+            .metallicMapName = "gold_metallic",
+            .roughnessMapName = "gold_roughness"
+        };
+        renderMesh(goldSphereOptions);
+
+        // PBR Texture Sphere - Stucco
+        RenderMeshOptions stuccoSphereOptions{
+            .shaderName = "default",
+            .meshName = "sphere",
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 6.0)),
+            .camera = minimapCamera,
+            .textureName = "stucco_albedo",
+            .normalMapName = "stucco_normal",
+            .metallicMapName = "stucco_metallic",
+            .roughnessMapName = "stucco_roughness"
+        };
+        renderMesh(stuccoSphereOptions);
+
+        // Dragon with Animated Textures
+        RenderMeshOptions dragonOptions{
+            .shaderName = "default",
+            .meshName = "dragon",
+            .modelMatrix = m_player.getMatrix(),
+            .camera = minimapCamera,
+            .animateTextures = std::list<std::string>{"checkerboard", "grass", "archi"}
+        };
+
+        renderMesh(dragonOptions);
     }
 
     /**
@@ -499,6 +667,7 @@ public:
      * @param shaderName The name of the shader to use for rendering.
      * @param meshName The name of the mesh to render.
      * @param modelMatrix The Model matrix for transforming the mesh.
+     * @param camera The camera to render the scene with.
      * @param textureName (Optional) The name of the diffuse texture to apply to the mesh. If not provided, the mesh is rendered without a texture.
      * @param normalMapName (Optional) The name of the normal map to apply to the mesh. If not provided, normal mapping is not used.
      * @param metallicMapName (Optional) The name of the metallic map to apply to the mesh. This enhances the metallic look on the material. If not provided, a default metallic value is used.
@@ -511,6 +680,7 @@ public:
         std::string shaderName;
         std::string meshName;
         glm::mat4 modelMatrix;
+        Camera camera;
         std::optional<std::string> textureName = std::nullopt;
         std::optional<std::string> normalMapName = std::nullopt;
         std::optional<std::string> metallicMapName = std::nullopt;
@@ -523,7 +693,7 @@ public:
     void renderMesh(const RenderMeshOptions& options)
     {
         auto& meshes = m_meshManager->getMeshes(options.meshName);
-        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * options.modelMatrix;
+        const glm::mat4 mvpMatrix = m_projectionMatrix * options.camera.viewMatrix() * options.modelMatrix;
         const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(options.modelMatrix));
 
         for (auto& mesh : meshes)
@@ -742,6 +912,16 @@ public:
         glDepthFunc(GL_LESS);
     }
 
+    void renderMinimap() {
+        Shader& minimapShader = m_shaderManager->getShader("minimap");
+        minimapShader.bind();
+        glBindVertexArray(quadVAO);
+        glBindTexture(GL_TEXTURE_2D, minimapTexture);
+        glUniform1i(3, 0);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
+    }
+
     void renderPoint(glm::vec3 position, glm::vec3 color) {
         Shader& pointShader = m_shaderManager->getShader("point");
         pointShader.bind();
@@ -811,17 +991,20 @@ public:
         RenderMeshOptions Options1{
                 .shaderName = "default",
                 .meshName = "cube",
-                .modelMatrix = armModelMatrix3
+                .modelMatrix = armModelMatrix3,
+                .camera = m_camera
         };
         RenderMeshOptions Options2{
                 .shaderName = "default",
                 .meshName = "cube",
-                .modelMatrix = armModelMatrix4
+                .modelMatrix = armModelMatrix4,
+                .camera = m_camera
         };
         RenderMeshOptions Options3{
                 .shaderName = "default",
                 .meshName = "cube",
-                .modelMatrix = armModelMatrix5
+                .modelMatrix = armModelMatrix5,
+                .camera = m_camera
         };
         renderMesh(Options1); // arm1
         renderMesh(Options2); // arm2
@@ -862,7 +1045,8 @@ public:
         RenderMeshOptions headSegmentOptions{
                 .shaderName = "default",
                 .meshName = "cube",
-                .modelMatrix = headModelMatrix
+                .modelMatrix = headModelMatrix,
+                .camera = m_camera
         };
         renderMesh(headSegmentOptions);
 
@@ -887,7 +1071,8 @@ public:
             RenderMeshOptions bodySegmentOptions{
                 .shaderName = "default",
                 .meshName = "cube",
-                .modelMatrix = bodyModelMatrix
+                .modelMatrix = bodyModelMatrix,
+                .camera = m_camera
             };
 
             // Render the current body segment
@@ -1145,10 +1330,6 @@ public:
 private:
     Window m_window;
     Camera m_camera;
-
-    
-
-    
     std::map<std::string, std::vector<GLuint>> animations;
 
     // Manager classes
@@ -1175,7 +1356,7 @@ private:
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
     float m_metallic = 0.0f;
-    float m_roughness = 0.0f;
+    float m_roughness = 1.0f;
 
     // Light variables
     glm::vec3 m_lightPos = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -1189,6 +1370,13 @@ private:
     unsigned int irradianceMap;
     unsigned int cubeVAO = 0;
     unsigned int cubeVBO = 0;
+
+    // Minimap variables
+    GLuint minimapFBO, minimapTexture;
+    int minimapLength = 256;
+    GLuint quadVAO, quadVBO;
+    bool m_renderMinimap{ false };
+    Camera minimapCamera = Camera(&m_window, glm::vec3(-1.0f, 0.2f, -0.5f), glm::vec3(1.0f, 0.0f, 0.4f), 0.03f, 0.0035f);
 
     // Bezier Variables
     std::vector<glm::vec3> m_blist; // point list for bezier
