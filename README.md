@@ -33,7 +33,7 @@ For example: (but we can come up with any others)
 - [ ] (Hazel) Post-processing effects
 - [ ] Procedurally generated terrains
 - [ ] Water surfaces that are procedurally generated (produce a vertex grid and move the vertices according to a combination of several sinus functions that you can evaluate in the vertex shader).
-- [ ] (Qinxin) Animated textures (by switching textures frame to frame)
+- [x] (Qinxin) Animated textures (by switching textures frame to frame)
 - [x] (Qinxin) Zoom effects / perspective changes
 - [x] (Hazel & Vincent) (Really simple, will improve) Changing lighting conditions (like a day-night system) (Simple day/night change, affecting global illum, light bulb stay unchanged)
 - [ ] (Vincent) A minimap (by rendering from a camera high up in the sky, and displaying it on a quad)
