@@ -300,7 +300,7 @@ public:
         ImGui::InputInt("Snake length", &m_numBodySegments);
         ImGui::Checkbox("Animate Snake", &animateSnake);
         ImGui::DragFloat3("Robot Arm Position", glm::value_ptr(armPosEnd), 0.1f, -20.0f, 20.0f);
-        if (glm::length(armPosEnd - armPosOrigin) > 2) {
+        if (glm::length(armPosEnd - armPosOrigin) > 3) {
             armPosEnd = glm::vec3(1.0f, 1.0f, 1.5f);
         }
 
@@ -716,7 +716,9 @@ public:
         glm::mat4 armTranslationMatrix = glm::translate(glm::mat4(1.0f), armTranslation);
         
         angles = inverse_to_pos(armPosEnd, armPosOrigin, 1.0f);
+        inverseKinematics(glm::radians(angles.x), 1.0f, armPosEnd, armPosOrigin, theta1, theta2, theta3);
         //std::cout << angles.x << " " << angles.y << " " << angles.z << std::endl;
+        //std::cout << glm::degrees(theta1) << " " << glm::degrees(theta2) << " " << glm::degrees(theta3) << std::endl;
         
         glm::mat4 rotz_1 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.x), glm::vec3(0, 1, 0));
         glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.y), glm::vec3(-1, 0, 0));
@@ -725,29 +727,21 @@ public:
         glm::mat4 armModelMatrix1 = armTranslationMatrix * rotz_1 * rotz_2 * trans_armToNext * armScaleMatrix;
         glm::mat4 armModelMatrix2 = armTranslationMatrix * rotz_1 * rotz_2 * trans_armToNext * trans_armToNext * rotz_3 * trans_armToNext * armScaleMatrix;
 
-        renderMesh("default", "cube", armModelMatrix1); // arm1
-        renderMesh("default", "cube", armModelMatrix2); // arm2
+        //renderMesh("default", "cube", armModelMatrix1); // arm1
+        //renderMesh("default", "cube", armModelMatrix2); // arm2
 
-        /*glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.y), glm::vec3(1, 0, 0));
+        glm::mat4 rotz_4 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.x), glm::vec3(0, 1, 0));
+        glm::mat4 rotz_5 = glm::rotate(glm::mat4(1.0f), theta1, glm::vec3(-1, 0, 0));
+        glm::mat4 rotz_6 = glm::rotate(glm::mat4(1.0f), -theta2, glm::vec3(1, 0, 0));
+        glm::mat4 rotz_7 = glm::rotate(glm::mat4(1.0f), -theta3, glm::vec3(1, 0, 0));
 
-        glm::mat4 arm2ModelMatrix = armModelMatrix * trans_armToNext * rotz_2;
-        renderMesh("default", "cube", arm2ModelMatrix);*/
+        glm::mat4 armModelMatrix3 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * armScaleMatrix;
+        glm::mat4 armModelMatrix4 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * trans_armToNext * rotz_6 * trans_armToNext * armScaleMatrix;
+        glm::mat4 armModelMatrix5 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * trans_armToNext * rotz_6 * trans_armToNext * trans_armToNext * rotz_7 * trans_armToNext * armScaleMatrix;
 
-        //glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
-        //int rot_dir = -1;
-
-        //for (int i = 0; i < m_numBodySegments; ++i)
-        //{
-        //    glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(rot_dir * m_head_rotationAngle * 1.2f), glm::vec3(0, 1, 0));
-        //    glm::mat4 bodyModelMatrix = lastModelMatrix * trans_headToBody * rotz_2;
-        //    lastModelMatrix = bodyModelMatrix;
-        //    rot_dir *= -1;
-
-        //    // Render the current body segment
-        //    const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
-        //    const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
-        //    renderMesh("default", "cube", bodyModelMatrix);
-        //}
+        renderMesh("default", "cube", armModelMatrix3); // arm1
+        renderMesh("default", "cube", armModelMatrix4); // arm2
+        renderMesh("default", "cube", armModelMatrix5); // arm3
     }
 
     void renderSnake() {
@@ -1092,8 +1086,11 @@ private:
 
     // robot arm variables
     glm::vec3 armPosOrigin = glm::vec3(1.5f, 0.0f, 0.0f);
-    glm::vec3 armPosEnd = glm::vec3(0.5f, 1.0f, 1.0f);
+    glm::vec3 armPosEnd = glm::vec3(0.5f, 1.0f, 0.0f);
     glm::vec3 angles = glm::vec3(0.0f, 0.0f, 0.0f); // 3 angles for inverse kinematics
+    float theta1 = 0.0f;
+    float theta2 = 0.0f;
+    float theta3 = 0.0f;
 
     // flame variables
     bool m_flame_init = false;
