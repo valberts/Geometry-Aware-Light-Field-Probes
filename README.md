@@ -2,7 +2,39 @@
 
 ## Controls
 
-`Add basic controls (like how to move the camera/switch between viewpoints here)`
+`W - move forward`
+
+`A - move left`
+
+`S - move back`
+
+`D - move right`
+
+`Click and drag mouse - Pan camera`
+
+## User Interface
+
+### Window
+- Camera mode: 0 freecam, 1 top down, 2 third-person
+- Normal mapping: ON/OFF to toggle normal mapping
+- Skybox: ON/OFF to toggle environment mapping
+- Minimap: ON/OFF to toggle displaying the minimap
+- Night time: ON/OFF to toggle between daytime and nighttime lighting conditions
+- Light a flame: ON/OFF to toggle flame particle effects
+- Snake length: determines the number of segments for the snake
+- Animate snake: ON/OFF render the snake and animate it with hierarchical transformations
+- Animate texture: ON/OFF animate the texture of the player
+- Robot arm position: X/Y/Z change the target position of the robot arm
+- Start camera motion: starts the bezier camera motion
+
+### Light controls
+- Light position - X/Y/Z controls the position of the point light
+- Light color - R/G/B controls the color of the point light
+
+### PBR
+- Albedo: R/G/B controls the color of the albedo material property of the player
+- Metallic: 0.0-1.0 controls the metallic material property of the player
+- Roughness: 0.0-1.0 controls the roughenss material property of the player
 
 ### Views
 
