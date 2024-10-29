@@ -28,8 +28,6 @@ layout(location = 18) uniform float ao = 1.0f;
 layout(location = 19) uniform samplerCube irradianceMap;
 layout(location = 20) uniform bool useIrradianceMap;
 
-layout(location = 30) uniform bool night;
-
 in vec3 fragPosition;
 in vec3 fragNormal;
 in vec2 fragTexCoord;
@@ -136,11 +134,6 @@ void main()
         irradiance = texture(irradianceMap, N).rgb;
         //fragColor = vec4(irradiance, 1.0); // debug irradiance
         //return;
-    }
-
-    // Night mode
-    if (night) {
-        irradiance *= 0.01;
     }
 
     vec3 diffuse    = irradiance * fragAlbedo;

@@ -26,9 +26,6 @@ DISABLE_WARNINGS_POP()
 #include <random>
 #include "camera.h"
 #include "managers.cpp"
-#include "player.cpp"
-#include "fire.h"
-#include "inversek.h"
 #include <stb/stb_image.h>
 #include <map>
 
@@ -59,7 +56,7 @@ public:
         loadHDR();
         setupCubemap();
         setupIrradiance();
-        setupMinimap();
+		initializeProbeGrid(2, 2, 2, 2.0f);
 
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
     }
@@ -76,11 +73,7 @@ public:
                             {GL_FRAGMENT_SHADER, "shaders/cubemap_frag.glsl"} });
             m_shaderManager->loadShader("irradiance", { {GL_VERTEX_SHADER, "shaders/skybox_vert.glsl"},
                             {GL_FRAGMENT_SHADER, "shaders/irradiance_frag.glsl"} });
-            m_shaderManager->loadShader("minimap", { {GL_VERTEX_SHADER, "shaders/minimap_vert.glsl"},
-                {GL_FRAGMENT_SHADER, "shaders/minimap_frag.glsl"} });
             m_shaderManager->loadShader("shadow", {{GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}});
-            m_shaderManager->loadShader("fire", { {GL_VERTEX_SHADER, "shaders/fire_vert.glsl"},
-                                                  {GL_FRAGMENT_SHADER, "shaders/fire_frag.glsl"} });
             m_shaderManager->loadShader("point", { {GL_VERTEX_SHADER, "shaders/point_vert.glsl"},
                                       {GL_FRAGMENT_SHADER, "shaders/point_frag.glsl"} });
 
@@ -102,6 +95,7 @@ public:
         m_meshManager->loadMesh("cube", "resources/cube.obj");
         m_meshManager->loadMesh("floor", "resources/floor.obj");
         m_meshManager->loadMesh("sphere", "resources/sphere_highpoly.obj");
+		m_meshManager->loadMesh("scene", "resources/scene.obj");
     }
 
     void loadTextures()
@@ -275,52 +269,22 @@ public:
         glViewport(0, 0, 1024, 1024);
     }
 
-    // setup minimap render to texture and display on screen
-    void setupMinimap() {
-        glCreateFramebuffers(1, &minimapFBO);
-        glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
+    void initializeProbeGrid(int gridSizeX = 3, int gridSizeY = 3, int gridSizeZ = 3, float spacing = 1.0f) {
+        // Calculate the offsets to center the grid around the origin
+        float offsetX = (gridSizeX - 1) * spacing / 2.0f;
+        float offsetZ = (gridSizeZ - 1) * spacing / 2.0f;
 
-        glCreateTextures(GL_TEXTURE_2D, 1, &minimapTexture);
-        glBindTexture(GL_TEXTURE_2D, minimapTexture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, minimapLength, minimapLength, 0, GL_RGB, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // Setup the shader for rendering the minimap texture to a quad
-
-        float scale = 0.5f; // scale of the quad
-        // how much to translate quad to move it to the top left corner of the screen
-        float translateX = -1.0f + (scale * 1.0f);
-        float translateY = 1.0f - (scale * 1.0f);
-
-        float quadVertices[] = {
-            // positions (scaled and translated)     // texCoords
-            (-1.0f * scale + translateX),  (1.0f * scale + translateY),  0.0f, 1.0f,
-            (-1.0f * scale + translateX),  (0.0f * scale + translateY),  0.0f, 0.0f,
-            (0.0f * scale + translateX),  (0.0f * scale + translateY),  1.0f, 0.0f,
-
-            (-1.0f * scale + translateX),  (1.0f * scale + translateY),  0.0f, 1.0f,
-            (0.0f * scale + translateX),  (0.0f * scale + translateY),  1.0f, 0.0f,
-            (0.0f * scale + translateX),  (1.0f * scale + translateY),  1.0f, 1.0f
-        };
-
-        glCreateVertexArrays(1, &quadVAO);
-        glCreateBuffers(1, &quadVBO);
-        glBindVertexArray(quadVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
-        // Do all minimap rendering here
-
+        for (int x = 0; x < gridSizeX; ++x) {
+            for (int y = 0; y < gridSizeY; ++y) {
+                for (int z = 0; z < gridSizeZ; ++z) {
+                    glm::vec3 probePosition = glm::vec3(x * spacing - offsetX, y * spacing, z * spacing - offsetZ);
+                    m_probePositions.push_back(probePosition);
+                }
+            }
+        }
     }
+
+
 
     void update()
     {
@@ -329,7 +293,6 @@ public:
             // This is your game loop
             // Put your real-time logic and rendering in here
             processInput();
-            updateScene();
             render();
             // Processes input and swaps the window buffer
             m_window.swapBuffers();
@@ -338,134 +301,60 @@ public:
 
     void processInput()
     {
-        if (m_cameraMode == 0) {
-            m_camera.updateInput();
-        }
+        m_camera.updateInput();
         m_window.updateInput();
 
 
-        // Use ImGui for easy input/output of ints, floats, strings, etc...
-        ImGui::Begin("Window");
-        ImGui::InputInt("Camera mode", &m_cameraMode);
-        ImGui::Checkbox("Normal Mapping", &m_enableNormalMapping);
-        //ImGui::Checkbox("Use material if no texture", &m_useMaterial);
+        //// Use ImGui for easy input/output of ints, floats, strings, etc...
+        //ImGui::Begin("Window");
+        //ImGui::Checkbox("Normal Mapping", &m_enableNormalMapping);
+        ////ImGui::Checkbox("Use material if no texture", &m_useMaterial);
+        //ImGui::Checkbox("Skybox", &m_renderSkybox);
+        //ImGui::End();
 
-        ImGui::Checkbox("Skybox", &m_renderSkybox);
-        ImGui::Checkbox("Minimap", &m_renderMinimap);
-        ImGui::Checkbox("Night Time", &m_night);
-        ImGui::Checkbox("Light a flame", &m_flame);
+        //// PBR Shading window;
+        //ImGui::Begin("PBR");
+        //ImGui::ColorEdit3("Albedo", (float*)&m_albedo);
+        //ImGui::SliderFloat("Metallic", &m_metallic, 0.0f, 1.0f);
+        //ImGui::SliderFloat("Roughness", &m_roughness, 0.0f, 1.0f);
+        //ImGui::End();
 
-        ImGui::InputInt("Snake length", &m_numBodySegments);
-        ImGui::Checkbox("Animate Snake", &animateSnake);
-        ImGui::Checkbox("Animate Texture", &animateTexture);
-        ImGui::DragFloat3("Robot Arm Position", glm::value_ptr(armPosEnd), 0.1f, -20.0f, 20.0f);
-        if (glm::length(armPosEnd - armPosOrigin) > 3) {
-            armPosEnd = glm::vec3(1.0f, 1.0f, 1.5f);
-        }
-
-        if (ImGui::Button("Start Camera Motion") && !isCameraMoving && m_blist.size() > 3)
-        {
-            // Start camera motion
-            isCameraMoving = true;
-            cameraMovementTime = 0.0f;
-        }
-
-        if (isCameraMoving)
-        {
-            UpdateCameraPosition(0.5f);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-
-        // PBR Shading window
-        ImGui::End();
-        ImGui::Begin("PBR");
-        ImGui::ColorEdit3("Albedo", (float*)&m_albedo);
-        ImGui::SliderFloat("Metallic", &m_metallic, 0.0f, 1.0f);
-        ImGui::SliderFloat("Roughness", &m_roughness, 0.0f, 1.0f);
+        // Interpolation point window
+        ImGui::Begin("Interpolation Point");
+        ImGui::SliderFloat("X", &m_pointX, 0.0f, 1.0f);
+        ImGui::SliderFloat("Y", &m_pointY, 0.0f, 1.0f);
+        ImGui::SliderFloat("Z", &m_pointZ, 0.0f, 1.0f);
         ImGui::End();
 
-        // Point light window
-        ImGui::Begin("Light Controls");
-        // Light Position Control
-        ImGui::Text("Light Position");
-        ImGui::DragFloat3("Position", glm::value_ptr(m_lightPos), 0.1f, -20.0f, 20.0f);
+        //// Point light window
+        //ImGui::Begin("Light Controls");
+        //// Light Position Control
+        //ImGui::Text("Light Position");
+        //ImGui::DragFloat3("Position", glm::value_ptr(m_lightPos), 0.1f, -20.0f, 20.0f);
 
-        // Light Color Control
-        ImGui::Text("Light Color");
-        (ImGui::ColorEdit3("Color", glm::value_ptr(m_lightColor)));
+        //// Light Color Control
+        //ImGui::Text("Light Color");
+        //(ImGui::ColorEdit3("Color", glm::value_ptr(m_lightColor)));
+        //ImGui::End();
+
+        // Interpolation weights view
+        std::vector<float> weights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
+        ImGui::Begin("Probe Interpolation Weights");
+        ImVec4 color;
+        for (size_t i = 0; i < weights.size(); ++i) {
+            // Map the weight to a color gradient (e.g., from blue to red)
+            color = ImVec4(1.0f - weights[i], weights[i], 0.0f, 1.0f); // Red to green gradient
+            ImGui::TextColored(color, "w%03d: %.2f", i, weights[i]);
+        }
         ImGui::End();
-    }
-
-    void updateScene() {
-        
-        // Move the player
-        const float playerSpeed = 0.1f;
-        if (glm::length(m_player.getDirection()) > 0.0f) { // if there's no movement, don't move
-            m_player.setPosition(m_player.getPosition() + glm::normalize(m_player.getDirection()) * m_player.getSpeed()); // normalize movement vector so diagonal isn't faster
-            m_player.setMatrix(glm::translate(glm::mat4(1.0f), m_player.getPosition()));
-        }
-
-        // Set minimap camera position and orientation
-        glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 10, 0);
-        minimapCamera.setPosition(cameraPosition);
-        minimapCamera.setForward(glm::normalize(m_player.getPosition() - cameraPosition));
-        minimapCamera.setUp(glm::vec3(0, 0, -1));
-
-        // Set scene camera position and orientation;
-        if (m_cameraMode == 0 && m_previousCameraMode != 0) { // reset to freecam parameters
-            m_player.setDirection(glm::vec3(0.0f, 0.0f, 0.0f)); // reset player direction because player input isnt updated in this camera mode
-            m_camera.setPosition(glm::vec3(-1.0f, 0.2f, -0.5f));
-            m_camera.setForward(glm::vec3(1.0f, 0.0f, 0.4f));
-            m_camera.setUp(glm::vec3(0, 1, 0));
-
-        } else if (m_cameraMode == 1) { // set the camera in top down mode
-            glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 5, 0);
-            m_camera.setPosition(cameraPosition);
-            m_camera.setForward(glm::normalize(m_player.getPosition() - cameraPosition));
-            m_camera.setUp(glm::vec3(0, 0, -1));
-            if (m_player.getPosition().x >= 2 && m_player.getPosition().x <= 4 && m_player.getPosition().z >= -1.0 && m_player.getPosition().z <= 1)
-            {
-                m_isCollude = true;
-            }
-            else
-            {
-                m_isCollude = false;
-            }
-        }
-        else if (m_cameraMode == 2) { // set the camera in 3rd person mode
-            glm::vec3 cameraPosition = m_player.getPosition() + glm::vec3(0, 2, 2);
-            m_camera.setPosition(cameraPosition);
-            m_camera.setForward(glm::normalize(m_player.getPosition() - cameraPosition));
-            m_camera.setUp(glm::vec3(0, 1, 0));
-        }
-
-        m_previousCameraMode = m_cameraMode;
     }
 
     void render() {
-        if (m_renderMinimap) {
-            // Render to Minimap FBO
-            glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
-            glViewport(0, 0, minimapLength, minimapLength);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Ensure depth buffer is cleared if you're using it
-            GLuint depthRBO;
-            glGenRenderbuffers(1, &depthRBO);
-            glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, minimapLength, minimapLength);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
-            renderMinimapScene(); // Render the scene for the minimap here (consider using a different view or data)
-        }
-
         // Render to Default Framebuffer (Main scene)
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, m_window.getWindowSize().x, m_window.getWindowSize().y);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear main framebuffer
         renderScene(); // Render the main scene
-
-        // Draw the Minimap on-screen
-        if (m_renderMinimap) {
-            renderMinimap();
-        }
     }
 
     void renderScene()
@@ -482,69 +371,6 @@ public:
         //glDepthFunc(GL_LEQUAL);
         //glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
-        // Floor
-        RenderMeshOptions floorOptions{
-            .shaderName = "default",
-            .meshName = "floor",
-            .modelMatrix = glm::mat4(1.0f), // Identity matrix
-            .camera = m_camera,
-            .textureName = "floor_albedo",
-            .normalMapName = "floor_normal",
-            .albedo = glm::vec3(1.0),
-            .metallic = 0.0f,
-            .roughness = 1.0f
-        };
-        renderMesh(floorOptions);
-
-        // PBR Texture Sphere - Metal
-        RenderMeshOptions metalSphereOptions{
-            .shaderName = "default",
-            .meshName = "sphere",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)),
-            .camera = m_camera,
-            .textureName = "metal_albedo",
-            .normalMapName = "metal_normal",
-            .metallicMapName = "metal_metallic",
-            .roughnessMapName = "metal_roughness"
-        };
-        renderMesh(metalSphereOptions);
-
-        // PBR Texture Sphere - Gold
-        RenderMeshOptions goldSphereOptions{
-            .shaderName = "default",
-            .meshName = "sphere",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)),
-            .camera = m_camera,
-            .textureName = "gold_albedo",
-            .normalMapName = "gold_normal",
-            .metallicMapName = "gold_metallic",
-            .roughnessMapName = "gold_roughness"
-        };
-        renderMesh(goldSphereOptions);
-
-        // PBR Texture Sphere - Stucco
-        RenderMeshOptions stuccoSphereOptions{
-            .shaderName = "default",
-            .meshName = "sphere",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 6.0)),
-            .camera = m_camera,
-            .textureName = "stucco_albedo",
-            .normalMapName = "stucco_normal",
-            .metallicMapName = "stucco_metallic",
-            .roughnessMapName = "stucco_roughness"
-        };
-        renderMesh(stuccoSphereOptions);
-
-        // Dragon with Animated Textures
-        RenderMeshOptions dragonOptions{
-            .shaderName = "default",
-            .meshName = "dragon",
-            .modelMatrix = m_player.getMatrix(),
-            .camera = m_camera,
-            .animateTextures = std::list<std::string>{"checkerboard", "grass", "archi"}
-        };
-
-        renderMesh(dragonOptions);
         // Had to comment some code here to see PBR shaders
         //glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Enable color writes.
         //glEnable(GL_BLEND); // Enable blending.
@@ -554,119 +380,20 @@ public:
         //glDisable(GL_BLEND);
 
         // Render a point for the location of the point light
-        renderPoint(m_lightPos, m_lightColor);
-
-        // Render point for bezier curve
-        if (!m_blist.empty()) {
-            for (const auto& point : m_blist) {
-                renderPoint(point, glm::vec3(1.0, 0.0, 0.0));
-            }
-        }
-
-        // Render snake (hierarchical box transform)
-        // default length = 6
-        if (animateSnake) {
-            renderSnake();
-        }
-
-        renderRobotArm();
-        renderPoint(armPosOrigin, glm::vec3(0.0f, 1.0f, 0.5f));
-        renderPoint(armPosEnd, glm::vec3(0.0f, 1.0f, 0.5f));
-
-        // init fire (only run once)
-        if (m_flame && !m_flame_init) {
-            initFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.7, 0.4, 1.3)); // TODO: let user set position range
-            m_flame_init = true;
-        }
-        else if (m_flame && m_flame_init) {
-            renderFlame();
-        }
-        else if (!m_flame) {
-            m_flame_init = false;
-        }
+        //renderPoint(m_lightPos, m_lightColor);
 
         // Render skybox
         if (m_renderSkybox) {
             renderSkybox();
         }
-    }
 
-    void renderMinimapScene() {
-        // Clear the screen
+        // Render the interpolation point and visualize weights
+        glm::vec3 interpolatedPoint = getInterpolatedPoint(m_pointX, m_pointY, m_pointZ);
+        std::vector<float> weights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // ...
-        glEnable(GL_DEPTH_TEST);
-
-        // default depth
-        glDepthMask(GL_TRUE);
-        //glDepthFunc(GL_LEQUAL);
-        //glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-
-        // Floor
-        RenderMeshOptions floorOptions{
-            .shaderName = "default",
-            .meshName = "floor",
-            .modelMatrix = glm::mat4(1.0f), // Identity matrix
-            .camera = minimapCamera,
-            .textureName = "floor_albedo",
-            .normalMapName = "floor_normal",
-            .albedo = glm::vec3(1.0),
-            .metallic = 0.0f,
-            .roughness = 1.0f
-        };
-        renderMesh(floorOptions);
-
-        // PBR Texture Sphere - Metal
-        RenderMeshOptions metalSphereOptions{
-            .shaderName = "default",
-            .meshName = "sphere",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 0.0)),
-            .camera = minimapCamera,
-            .textureName = "metal_albedo",
-            .normalMapName = "metal_normal",
-            .metallicMapName = "metal_metallic",
-            .roughnessMapName = "metal_roughness"
-        };
-        renderMesh(metalSphereOptions);
-
-        // PBR Texture Sphere - Gold
-        RenderMeshOptions goldSphereOptions{
-            .shaderName = "default",
-            .meshName = "sphere",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 3.0)),
-            .camera = minimapCamera,
-            .textureName = "gold_albedo",
-            .normalMapName = "gold_normal",
-            .metallicMapName = "gold_metallic",
-            .roughnessMapName = "gold_roughness"
-        };
-        renderMesh(goldSphereOptions);
-
-        // PBR Texture Sphere - Stucco
-        RenderMeshOptions stuccoSphereOptions{
-            .shaderName = "default",
-            .meshName = "sphere",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(3.0, 1.0, 6.0)),
-            .camera = minimapCamera,
-            .textureName = "stucco_albedo",
-            .normalMapName = "stucco_normal",
-            .metallicMapName = "stucco_metallic",
-            .roughnessMapName = "stucco_roughness"
-        };
-        renderMesh(stuccoSphereOptions);
-
-        // Dragon with Animated Textures
-        RenderMeshOptions dragonOptions{
-            .shaderName = "default",
-            .meshName = "dragon",
-            .modelMatrix = m_player.getMatrix(),
-            .camera = minimapCamera,
-            .animateTextures = std::list<std::string>{"checkerboard", "grass", "archi"}
-        };
-
-        renderMesh(dragonOptions);
+        renderProbes(weights);
+        // Render the interpolation point
+        renderPoint(interpolatedPoint, glm::vec3(0.0f, 1.0f, 0.0f)); // Green color
     }
 
     /**
@@ -696,7 +423,6 @@ public:
         std::optional<glm::vec3> albedo = std::nullopt;
         std::optional<float> metallic = std::nullopt;
         std::optional<float> roughness = std::nullopt;
-        std::optional<std::list<std::string>> animateTextures = std::nullopt;
     };
     void renderMesh(const RenderMeshOptions& options)
     {
@@ -714,26 +440,13 @@ public:
             glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
 
             // Albedo Map
-            if (mesh.hasTextureCoords() && options.textureName.has_value()&& !animateTexture)
+            if (mesh.hasTextureCoords() && options.textureName.has_value())
             {
                 Texture* texture = m_textureManager->getTexture(*options.textureName);
                 texture->bind(GL_TEXTURE0);
                 glUniform1i(3, 0); // Texture unit 0
                 glUniform1i(4, GL_TRUE);
             }
-            else if (options.animateTextures.has_value() && animateTexture) {
-                Texture* texture = m_textureManager->getTexture(textures.front());
-				texture->bind(GL_TEXTURE0);
-				glUniform1i(3, 0); // Texture unit 0
-				glUniform1i(4, GL_TRUE);
-                timer += 0.1f;
-                if (timer > 5.0f) {
-					textures.pop_front();
-					textures.push_back(textures.front());
-                    glFinish();
-					timer = 0.0f;
-				}
-			}
             else
             {
                 glUniform1i(4, GL_FALSE);
@@ -815,9 +528,29 @@ public:
                 glUniform1i(20, GL_FALSE);
             }
 
-            glUniform1i(30, m_night);
 
             mesh.draw(shader);
+        }
+    }
+
+    void renderProbes(std::vector<float> weights) {
+        for (size_t i = 0; i < m_probePositions.size(); ++i) {
+            // Scale sphere size based on weight
+            glm::vec3 color = glm::mix(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), weights[i]); // Color gradient from red to green
+
+            glm::mat4 modelMatrix = glm::translate(glm::mat4(1.0f), m_probePositions[i]);
+            modelMatrix = glm::scale(modelMatrix, glm::vec3(0.1f)); // Scale down to 10%
+
+            RenderMeshOptions probeSphereOptions{
+                .shaderName = "default",
+                .meshName = "sphere",
+                .modelMatrix = modelMatrix,
+                .camera = m_camera,
+                .albedo = color,
+                .metallic = 0.0f,
+                .roughness = 0.5f
+            };
+            renderMesh(probeSphereOptions);
         }
     }
 
@@ -906,7 +639,6 @@ public:
         viewMatrix = glm::mat4(glm::mat3(m_camera.viewMatrix()));
         glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(m_projectionMatrix));
         glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(viewMatrix));
-        glUniform1i(3, m_night);
 
         // Draws the cubemap as the last object so we can save a bit of performance by discarding all fragments
         // where an object is present (a depth of 1.0f will always fail against any object's depth value)
@@ -918,16 +650,6 @@ public:
 
         // Switch back to the normal depth function
         glDepthFunc(GL_LESS);
-    }
-
-    void renderMinimap() {
-        Shader& minimapShader = m_shaderManager->getShader("minimap");
-        minimapShader.bind();
-        glBindVertexArray(quadVAO);
-        glBindTexture(GL_TEXTURE_2D, minimapTexture);
-        glUniform1i(3, 0);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        glBindVertexArray(0);
     }
 
     void renderPoint(glm::vec3 position, glm::vec3 color) {
@@ -963,238 +685,11 @@ public:
         glDeleteBuffers(1, &VBO);
     }
 
-    void renderRobotArm() {
-        glm::vec3 armScale(0.1f, 0.1f, 0.5f);
-        glm::vec3 armTranslation = armPosOrigin;
-
-        glm::vec3 armToNext(0.0f, 0.0f, 0.5f);
-        glm::mat4 trans_armToNext = glm::translate(glm::mat4(1.0f), armToNext);
-
-        glm::mat4 armScaleMatrix = glm::scale(glm::mat4(1.0f), armScale);
-        glm::mat4 armTranslationMatrix = glm::translate(glm::mat4(1.0f), armTranslation);
-        
-        angles = inverse_to_pos(armPosEnd, armPosOrigin, 1.0f);
-        inverseKinematics(glm::radians(angles.x), 1.0f, armPosEnd, armPosOrigin, theta1, theta2, theta3);
-        //std::cout << angles.x << " " << angles.y << " " << angles.z << std::endl;
-        //std::cout << glm::degrees(theta1) << " " << glm::degrees(theta2) << " " << glm::degrees(theta3) << std::endl;
-        
-        glm::mat4 rotz_1 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.x), glm::vec3(0, 1, 0));
-        glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.y), glm::vec3(-1, 0, 0));
-        glm::mat4 rotz_3 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.z), glm::vec3(-1, 0, 0));
-
-        glm::mat4 armModelMatrix1 = armTranslationMatrix * rotz_1 * rotz_2 * trans_armToNext * armScaleMatrix;
-        glm::mat4 armModelMatrix2 = armTranslationMatrix * rotz_1 * rotz_2 * trans_armToNext * trans_armToNext * rotz_3 * trans_armToNext * armScaleMatrix;
-
-        //renderMesh("default", "cube", armModelMatrix1); // arm1
-        //renderMesh("default", "cube", armModelMatrix2); // arm2
-
-        glm::mat4 rotz_4 = glm::rotate(glm::mat4(1.0f), glm::radians(angles.x), glm::vec3(0, 1, 0));
-        glm::mat4 rotz_5 = glm::rotate(glm::mat4(1.0f), theta1, glm::vec3(-1, 0, 0));
-        glm::mat4 rotz_6 = glm::rotate(glm::mat4(1.0f), -theta2, glm::vec3(1, 0, 0));
-        glm::mat4 rotz_7 = glm::rotate(glm::mat4(1.0f), -theta3, glm::vec3(1, 0, 0));
-
-        glm::mat4 armModelMatrix3 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * armScaleMatrix;
-        glm::mat4 armModelMatrix4 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * trans_armToNext * rotz_6 * trans_armToNext * armScaleMatrix;
-        glm::mat4 armModelMatrix5 = armTranslationMatrix * rotz_4 * rotz_5 * trans_armToNext * trans_armToNext * rotz_6 * trans_armToNext * trans_armToNext * rotz_7 * trans_armToNext * armScaleMatrix;
-        RenderMeshOptions Options1{
-                .shaderName = "default",
-                .meshName = "cube",
-                .modelMatrix = armModelMatrix3,
-                .camera = m_camera
-        };
-        RenderMeshOptions Options2{
-                .shaderName = "default",
-                .meshName = "cube",
-                .modelMatrix = armModelMatrix4,
-                .camera = m_camera
-        };
-        RenderMeshOptions Options3{
-                .shaderName = "default",
-                .meshName = "cube",
-                .modelMatrix = armModelMatrix5,
-                .camera = m_camera
-        };
-        renderMesh(Options1); // arm1
-        renderMesh(Options2); // arm2
-        renderMesh(Options3); // arm3
-    }
-
-    void renderSnake() {
-        if (m_move_right)
-            m_snake_pos.x += 0.05f;
-        if (m_move_left)
-            m_snake_pos.x -= 0.05f;
-        if (m_move_down)
-            m_snake_pos.z += 0.05f;
-        if (m_move_up)
-            m_snake_pos.z -= 0.05f;
-
-        glm::vec3 headScale(0.08f, 0.1f, 0.2f);
-        glm::vec3 headTranslation = m_snake_pos;
-        glm::mat4 trans_axis_to_side_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, -1.0));
-        glm::mat4 trans_axis_to_side_back_1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0, 1.0));
-
-        glm::vec3 headToBody(0.0f, 0.0f, 2.0f);
-        glm::mat4 trans_headToBody = glm::translate(glm::mat4(1.0f), headToBody);
-
-        glm::mat4 headScaleMatrix = glm::scale(glm::mat4(1.0f), headScale);
-        glm::mat4 headTranslationMatrix = glm::translate(glm::mat4(1.0f), headTranslation);
-        if (m_head_rotationAngle >= 45.0f || m_head_rotationAngle <= -45.0f)
-        {
-            m_head_rotationDirection *= -1;
-        }
-        m_head_rotationAngle += float(m_head_rotationDirection);
-        // std::cout << m_head_rotationAngle << std::endl;
-        glm::mat4 rotz_1 = glm::rotate(glm::mat4(1.0f), glm::radians(m_head_rotationAngle), glm::vec3(0, 1, 0));
-        glm::mat4 headModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
-
-        const glm::mat4 headMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * headModelMatrix;
-        const glm::mat3 headScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(headModelMatrix));
-        RenderMeshOptions headSegmentOptions{
-                .shaderName = "default",
-                .meshName = "cube",
-                .modelMatrix = headModelMatrix,
-                .camera = m_camera
-        };
-        renderMesh(headSegmentOptions);
-
-        glm::mat4 lastModelMatrix = headTranslationMatrix * headScaleMatrix * trans_axis_to_side_1 * rotz_1 * trans_axis_to_side_back_1;
-        int rot_dir = -1;
-
-        for (int i = 0; i < m_numBodySegments; ++i)
-        {
-            // add random angle to body rotation
-            /*std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_real_distribution<float> dist(0.5f, 2.0f);
-            float randomNumber = dist(gen);*/
-            glm::mat4 rotz_2 = glm::rotate(glm::mat4(1.0f), glm::radians(rot_dir * m_head_rotationAngle * 1.2f), glm::vec3(0, 1, 0));
-            glm::mat4 bodyModelMatrix = lastModelMatrix * trans_headToBody * rotz_2;
-            lastModelMatrix = bodyModelMatrix;
-            rot_dir *= -1;
-
-            // Render the current body segment
-            const glm::mat4 bodyMvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * bodyModelMatrix;
-            const glm::mat3 bodyScaledNormalModelMatrix = glm::inverseTranspose(glm::mat3(bodyModelMatrix));
-            RenderMeshOptions bodySegmentOptions{
-                .shaderName = "default",
-                .meshName = "cube",
-                .modelMatrix = bodyModelMatrix,
-                .camera = m_camera
-            };
-
-            // Render the current body segment
-            renderMesh(bodySegmentOptions);
-        }
-    }
-
-    void renderFlame() {
-        // render flame
-        for (int i = 0; i < MAX_PARTICLES; i++) {
-            glm::vec3 particleScale = glm::vec3(0.004f, 0.005f, 0.004f);
-            glm::mat4 particleScaleMatrix = glm::scale(glm::mat4(1.0f), particleScale);
-            glm::vec3 particleTranslation = m_fire[i].pos;
-            glm::mat4 particleTranslationMatrix = glm::translate(glm::mat4(1.0f), particleTranslation);
-            glm::mat4 particleModelMatrix = particleTranslationMatrix * particleScaleMatrix;
-            //glEnable(GL_BLEND); // Enable blending.
-            //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-            renderParticle("fire", "cube", particleModelMatrix, m_fire[i].color);
-            //glDisable(GL_BLEND);
-        }
-        // update particles
-        updateFire(m_fire, MAX_PARTICLES, glm::vec3(-1.0, 0.0, 1.0), glm::vec3(-0.5, 0.6, 1.5));
-    }
-
-    void renderParticle(const std::string& shaderName,
-        const std::string& meshName,
-        const glm::mat4& modelMatrix,
-        const std::optional<glm::vec3>& inputColor = std::nullopt)
-    {
-        auto& meshes = m_meshManager->getMeshes(meshName);
-        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * modelMatrix;
-        // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
-        const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(modelMatrix));
-
-        for (auto& mesh : meshes)
-        {
-            Shader& shader = m_shaderManager->getShader(shaderName);
-            shader.bind();
-
-            glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-            glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(modelMatrix));
-            glUniformMatrix3fv(2, 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
-            glUniform3fv(3, 1, glm::value_ptr(*inputColor));
-
-            mesh.draw(shader);
-        }
-    }
-
     // In here you can handle key presses
     // key - Integer that corresponds to numbers in https://www.glfw.org/docs/latest/group__keys.html
     // mods - Any modifier keys pressed, like shift or control
     void onKeyPressed(int key, int mods)
     {
-        if (m_cameraMode != 0){
-            if (m_player.getPosition().x >= 2 && m_player.getPosition().x <= 4 && m_player.getPosition().z >= -1.0 && m_player.getPosition().z <= 1)
-            {
-                m_collusion = true;
-            }
-            else
-            {
-				m_collusion = false;
-			}
-            glm::vec3 playerDirection = m_player.getDirection();
-            switch (key) {
-            case GLFW_KEY_W:
-                m_player.setDirection(playerDirection + glm::vec3(0.0f, 0.0f, -1.0f)); // Move forward
-                break;
-            case GLFW_KEY_S:
-                m_player.setDirection(playerDirection + glm::vec3(0.0f, 0.0f, 1.0f)); // Move backward
-                break;
-            case GLFW_KEY_A:
-                if (!m_collusion && !m_isCollude) {
-                    m_player.setDirection(playerDirection + glm::vec3(-1.0f, 0.0f, 0.0f));
-                }
-                else
-                {
-                    m_player.setDirection(playerDirection); // Move left
-                }
-                //m_player.setDirection(playerDirection + glm::vec3(-1.0f, 0.0f, 0.0f)); // Move left
-                break;
-            case GLFW_KEY_D:
-                if (!m_collusion && !m_isCollude) {
-                    m_player.setDirection(playerDirection + glm::vec3(1.0f, 0.0f, 0.0f));
-                }
-                else
-                {
-                    m_player.setDirection(playerDirection); // Move left
-                }
-                //m_player.setDirection(playerDirection + glm::vec3(1.0f, 0.0f, 0.0f)); // Move left
-                break;
-            }
-        }
-        switch (key)
-        {
-            // use UP DOWN LEFT RIGHT to move the snake on y (horizontal) plane
-        case GLFW_KEY_RIGHT:
-            m_move_right = true;
-            break;
-        case GLFW_KEY_LEFT:
-            m_move_left = true;
-            break;
-        case GLFW_KEY_DOWN:
-            m_move_down = true;
-            break;
-        case GLFW_KEY_UP:
-            m_move_up = true;
-            break;
-        case GLFW_KEY_ESCAPE:
-            m_window.close();
-            exit(0);
-            break;
-        default:
-            break;
-        }
         std::cout << "Key pressed: " << key << std::endl;
     }
 
@@ -1204,37 +699,6 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyReleased(int key, int mods)
     {
-        if (m_cameraMode != 0) {
-            glm::vec3 playerDirection = m_player.getDirection(); 
-            switch (key) {
-                case GLFW_KEY_W:
-                    m_player.setDirection(playerDirection - glm::vec3(0.0f, 0.0f, -1.0f)); // Stop moving forward
-                    break;
-                case GLFW_KEY_S:
-                    m_player.setDirection(playerDirection - glm::vec3(0.0f, 0.0f, 1.0f)); // Stop moving backward
-                    break;
-                case GLFW_KEY_A:
-                    if (!m_collusion) {
-                        m_player.setDirection(playerDirection - glm::vec3(-1.0f, 0.0f, 0.0f));
-                    }
-                    else
-                    {
-                        m_player.setDirection(playerDirection); // Move left
-                    }
-                    //m_player.setDirection(playerDirection - glm::vec3(-1.0f, 0.0f, 0.0f)); // Move left
-                    break;
-                case GLFW_KEY_D:
-                    if (!m_collusion) {
-                        m_player.setDirection(playerDirection - glm::vec3(1.0f, 0.0f, 0.0f));
-                    }
-                    else
-                    {
-                        m_player.setDirection(playerDirection); // Move left
-                    }
-                    //m_player.setDirection(playerDirection - glm::vec3(1.0f, 0.0f, 0.0f)); // Move left
-                    break;
-            }
-        }
         std::cout << "Key released: " << key << std::endl;
     }
 
@@ -1256,24 +720,6 @@ public:
         case 0: // left
             break;
         case 1: // right
-            /*glm::ivec2 size = m_window.getWindowSize();
-            x = (2.0f * m_mousePos.x) / size.x - 1.0f;
-            y = 1.0f - (2.0f * m_mousePos.y) / size.y;*/
-            // x = 1.0f - (2.0f * m_mousePos.x) / size.x;
-            // y = (2.0f * m_mousePos.y) / size.y - 1.0f;
-            // m_blist.push_back(glm::vec3(float(x), float(y), 0.0f)); // TODO: set z
-
-            // predefined bline control points
-            m_blist.push_back(glm::vec3(-1.0f, 0.0f, -0.5f));
-            m_blist.push_back(glm::vec3(-1.0f, 0.0f, -1.5f));
-            m_blist.push_back(glm::vec3(0.0f, 0.0f, -1.5f));
-            m_blist.push_back(glm::vec3(0.0f, 0.0f, -0.5f));
-            m_blist.push_back(glm::vec3(1.0f, 0.0f, -0.5f));
-            m_blist.push_back(glm::vec3(1.0f, 1.0f, -0.5f));
-            m_blist.push_back(glm::vec3(0.0f, 1.0f, -0.5f));
-            m_blist.push_back(glm::vec3(0.0f, 1.0f, -1.5f));
-            m_blist.push_back(glm::vec3(0.0f, 0.0f, -1.5f));
-            m_blist.push_back(glm::vec3(0.0f, 0.0f, -0.5f));
             break;
         case 2: // middle
             break;
@@ -1291,84 +737,53 @@ public:
         //std::cout << "Released mouse button: " << button << std::endl;
     }
 
-    // calculate a point on the Bezier curve at time t
-    glm::vec3 getPt(glm::vec3 start, glm::vec3 end, float t)
-    {
-        return start + ((end - start) * t);
+
+    glm::vec3 getInterpolatedPoint(float tX, float tY, float tZ) {
+        // Clamp tX, tY, tZ to [0, 1]
+        tX = glm::clamp(tX, 0.0f, 1.0f);
+        tY = glm::clamp(tY, 0.0f, 1.0f);
+        tZ = glm::clamp(tZ, 0.0f, 1.0f);
+
+        glm::vec3 p000 = m_probePositions[0];
+        glm::vec3 p100 = m_probePositions[1];
+        glm::vec3 p010 = m_probePositions[2];
+        glm::vec3 p110 = m_probePositions[3];
+        glm::vec3 p001 = m_probePositions[4];
+        glm::vec3 p101 = m_probePositions[5];
+        glm::vec3 p011 = m_probePositions[6];
+        glm::vec3 p111 = m_probePositions[7];
+
+        // Trilinear interpolation
+        glm::vec3 p00 = glm::mix(p000, p100, tX);
+        glm::vec3 p01 = glm::mix(p001, p101, tX);
+        glm::vec3 p10 = glm::mix(p010, p110, tX);
+        glm::vec3 p11 = glm::mix(p011, p111, tX);
+
+        glm::vec3 p0 = glm::mix(p00, p10, tY);
+        glm::vec3 p1 = glm::mix(p01, p11, tY);
+
+        return glm::mix(p0, p1, tZ);
     }
 
-    glm::vec3 CalculateBezierPoint(float i, int s)
-    {
-        glm::vec3 posA, posB, posC;
-        if (s == 1)
-        {
-            posA = getPt(m_blist[0], m_blist[1], i);
-            posB = getPt(m_blist[1], m_blist[2], i);
-            posC = getPt(m_blist[2], m_blist[3], i);
-        }
-        else if (s == 2)
-        {
-            posA = getPt(m_blist[3], m_blist[4], i);
-            posB = getPt(m_blist[4], m_blist[5], i);
-            posC = getPt(m_blist[5], m_blist[6], i);
-        }
-        else
-        {
-            posA = getPt(m_blist[6], m_blist[7], i);
-            posB = getPt(m_blist[7], m_blist[8], i);
-            posC = getPt(m_blist[8], m_blist[9], i);
-        }
+    std::vector<float> getTrilinearWeights(float tX, float tY, float tZ) {
+        // Clamp tX, tY, tZ to [0, 1]
+        tX = glm::clamp(tX, 0.0f, 1.0f);
+        tY = glm::clamp(tY, 0.0f, 1.0f);
+        tZ = glm::clamp(tZ, 0.0f, 1.0f);
 
-        glm::vec3 posAB = getPt(posA, posB, i);
-        glm::vec3 posBC = getPt(posB, posC, i);
+        // Compute weights
+        float w000 = (1 - tX) * (1 - tY) * (1 - tZ);
+        float w100 = tX * (1 - tY) * (1 - tZ);
+        float w010 = (1 - tX) * tY * (1 - tZ);
+        float w110 = tX * tY * (1 - tZ);
+        float w001 = (1 - tX) * (1 - tY) * tZ;
+        float w101 = tX * (1 - tY) * tZ;
+        float w011 = (1 - tX) * tY * tZ;
+        float w111 = tX * tY * tZ;
 
-        return getPt(posAB, posBC, i);
+        return { w000, w100, w010, w110, w001, w101, w011, w111 };
     }
 
-    void UpdateCameraPosition(float deltaTime)
-    {
-        // std::cout << "move" << std::endl;
-        if (isCameraMoving)
-        {
-            // Update camera position along Bezier path
-            cameraMovementTime += deltaTime;
-            if (cameraMovementTime >= cameraMovementDuration)
-            {
-                // Camera reached the end of the path
-                isCameraMoving = false;
-                cameraMovementTime = 0.0f;
-            }
-
-            // Calculate new camera position based on Bezier path and cameraMovementTime
-            int s = 0;
-            float timePieceDuration = cameraMovementDuration / 3;
-            int cameraPosition = int(std::min((cameraMovementTime / timePieceDuration) + 1, 3.0f));
-            float p_local = (cameraMovementTime - (float(cameraPosition - 1)) * timePieceDuration) / timePieceDuration;
-            m_camera.setPos(CalculateBezierPoint(p_local, cameraPosition));
-        }
-    }
-    
-    struct AnimationState {
-        std::list<std::string> textureNames; // Holds names of textures for the current animation
-        std::list<std::string>::iterator currentFrame; // Iterator to the current frame
-        float frameDuration; // Duration to display each frame
-    };
-
-    void updateAnimationState(AnimationState& animState, float deltaTime) {
-        if (animState.textureNames.empty()) return;
-
-        timer += deltaTime;
-        std::cout<< timer << std::endl;
-        if (timer >= animState.frameDuration) {
-            timer = 0.0f; // Reset frame time
-            // Move to the next frame, loop to the beginning if at the end
-            ++animState.currentFrame;
-            if (animState.currentFrame == animState.textureNames.end()) {
-                animState.currentFrame = animState.textureNames.begin();
-            }
-            //animState.frameTime = 0.0f;
-        }
-    }
 
 
     
@@ -1384,21 +799,16 @@ private:
 
     glm::dvec2 m_mousePos;
 
-    // Player object
-    Player m_player;
-
     // Options
     bool m_enableNormalMapping = false;
-    int m_previousCameraMode{ 0 };
-    int m_cameraMode{ 0 }; // 0 = freecam, 1 = top down, 2 = 3rd person
     bool m_useMaterial{ true };
     bool m_renderSkybox{ true };
-    bool animateSnake{ false };             // only draw snake when true
-    bool animateTexture{ false };             // only draw flame when true
-    bool m_night{ false };
-    bool m_flame{ false };
-    bool m_collusion{ false };
-    bool m_isCollude{ false };
+
+	// Probe variables
+    std::vector<glm::vec3> m_probePositions;  // Stores probe positions
+	float m_pointX = 0.5f;
+	float m_pointY = 0.5f;
+	float m_pointZ = 0.5f;
 
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
@@ -1406,8 +816,8 @@ private:
     float m_roughness = 1.0f;
 
     // Light variables
-    glm::vec3 m_lightPos = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 m_lightColor = glm::vec3(1.0f);
+    glm::vec3 m_lightPos = glm::vec3(0.0f, 3.0f, 0.0f);
+    glm::vec3 m_lightColor = glm::vec3(0.0f);
 
     // Environment map variables
     unsigned int captureFBO;
@@ -1417,45 +827,6 @@ private:
     unsigned int irradianceMap;
     unsigned int cubeVAO = 0;
     unsigned int cubeVBO = 0;
-
-    // Minimap variables
-    GLuint minimapFBO, minimapTexture;
-    int minimapLength = 256;
-    GLuint quadVAO, quadVBO;
-    bool m_renderMinimap{ false };
-    Camera minimapCamera = Camera(&m_window, glm::vec3(-1.0f, 0.2f, -0.5f), glm::vec3(1.0f, 0.0f, 0.4f), 0.03f, 0.0035f);
-
-    // Bezier Variables
-    std::vector<glm::vec3> m_blist; // point list for bezier
-    // bool m_drawPoint{ false };
-    bool isCameraMoving = false;
-    float cameraMovementTime = 0.0f;      // Time elapsed during camera movement
-    float cameraMovementDuration = 25.0f; // Total duration for camera movement (adjust as needed)
-    
-    // Snake variables
-    float animationTime = 0.0f;           // Animation time
-    float animationSpeed = 1.0f;          // Speed of animation
-    int m_numBodySegments{5};             // num of body segements
-    int m_head_rotationDirection = 1;
-    float m_head_rotationAngle = 0.0f;
-    glm::vec3 m_snake_pos = glm::vec3(-1.5f, 0.0f, 0.0f);
-    bool m_move_right = false;
-    bool m_move_left = false;
-    bool m_move_down = false;
-    bool m_move_up = false;
-
-    // robot arm variables
-    glm::vec3 armPosOrigin = glm::vec3(1.5f, 0.0f, 0.0f);
-    glm::vec3 armPosEnd = glm::vec3(0.5f, 1.0f, 0.0f);
-    glm::vec3 angles = glm::vec3(0.0f, 0.0f, 0.0f); // 3 angles for inverse kinematics
-    float theta1 = 0.0f;
-    float theta2 = 0.0f;
-    float theta3 = 0.0f;
-
-    // flame variables
-    bool m_flame_init = false;
-    Particle m_fire[MAX_PARTICLES];
-    AnimationState animState;
 
     float timer = 0.0f;
     std::list<std::string> textures = std::list<std::string>{ "checkerboard", "grass", "archi" };
