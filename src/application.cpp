@@ -76,6 +76,8 @@ public:
             m_shaderManager->loadShader("shadow", {{GL_VERTEX_SHADER, "shaders/shadow_vert.glsl"}});
             m_shaderManager->loadShader("point", { {GL_VERTEX_SHADER, "shaders/point_vert.glsl"},
                                       {GL_FRAGMENT_SHADER, "shaders/point_frag.glsl"} });
+            m_shaderManager->loadShader("depth", { {GL_VERTEX_SHADER, "shaders/depth_vert.glsl"},
+                          {GL_FRAGMENT_SHADER, "shaders/depth_frag.glsl"} });
 
             // Any new shaders can be added below in similar fashion.
             // ==> Don't forget to reconfigure CMake when you do!
@@ -272,12 +274,13 @@ public:
     void initializeProbeGrid(int gridSizeX = 3, int gridSizeY = 3, int gridSizeZ = 3, float spacing = 1.0f) {
         // Calculate the offsets to center the grid around the origin
         float offsetX = (gridSizeX - 1) * spacing / 2.0f;
+        float offsetY = (gridSizeY - 1) * spacing / 2.0f;
         float offsetZ = (gridSizeZ - 1) * spacing / 2.0f;
 
         for (int x = 0; x < gridSizeX; ++x) {
             for (int y = 0; y < gridSizeY; ++y) {
                 for (int z = 0; z < gridSizeZ; ++z) {
-                    glm::vec3 probePosition = glm::vec3(x * spacing - offsetX, y * spacing, z * spacing - offsetZ);
+                    glm::vec3 probePosition = glm::vec3(x * spacing - offsetX, y * spacing - offsetY, z * spacing - offsetZ);
                     m_probePositions.push_back(probePosition);
                 }
             }
@@ -353,12 +356,6 @@ public:
         // Render to Default Framebuffer (Main scene)
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, m_window.getWindowSize().x, m_window.getWindowSize().y);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear main framebuffer
-        renderScene(); // Render the main scene
-    }
-
-    void renderScene()
-    {
         // Clear the screen
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -378,6 +375,34 @@ public:
         //renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
         //renderMesh("default", "dragon", m_player.getMatrix());
         //glDisable(GL_BLEND);
+
+        // Render dragon mesh
+        //RenderMeshOptions dragonOptions{
+        //	.shaderName = "default",
+        //	.meshName = "dragon",
+        //	.modelMatrix = glm::mat4(1.0f),
+        //	.camera = m_camera,
+        //	.albedo = glm::vec3(1.0f, 1.0f, 1.0f),
+        //	.metallic = 0.0f,
+        //	.roughness = 0.5f
+        //};
+        //renderMesh(dragonOptions);
+
+        auto& meshes = m_meshManager->getMeshes("dragon");
+        glm::mat4 modelMatrix = glm::mat4(1.0f);
+        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * glm::mat4(1.0f);
+        for (auto& mesh : meshes) {
+            Shader& shader = m_shaderManager->getShader("depth");
+            shader.bind();
+
+            glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
+            glUniform1f(1, m_nearPlane);
+            glUniform1f(2, m_farPlane);
+
+            mesh.draw(shader);
+        }
+
+
 
         // Render a point for the location of the point light
         //renderPoint(m_lightPos, m_lightColor);
@@ -803,6 +828,8 @@ private:
     bool m_enableNormalMapping = false;
     bool m_useMaterial{ true };
     bool m_renderSkybox{ true };
+	float m_nearPlane = 0.1f;
+    float m_farPlane = 5.0f;
 
 	// Probe variables
     std::vector<glm::vec3> m_probePositions;  // Stores probe positions
@@ -831,7 +858,7 @@ private:
     float timer = 0.0f;
     std::list<std::string> textures = std::list<std::string>{ "checkerboard", "grass", "archi" };
     // Projection and view matrices for you to fill in and use
-    glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
+    glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, m_nearPlane, m_farPlane);
     // glm::mat4 m_viewMatrix = glm::lookAt(glm::vec3(-1, 1, -1), glm::vec3(0), glm::vec3(0, 1, 0));
     glm::mat4 m_viewMatrix = glm::lookAt(m_camera.cameraPos(), glm::vec3(0), glm::vec3(0, 1, 0));
     glm::mat4 m_modelMatrix{1.0f};
