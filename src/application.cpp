@@ -28,6 +28,7 @@ DISABLE_WARNINGS_POP()
 #include "managers.cpp"
 #include <stb/stb_image.h>
 #include <map>
+#include <numeric>
 
 
 class Application
@@ -57,6 +58,7 @@ public:
         setupCubemap();
         setupIrradiance();
 		initializeProbeGrid(2, 2, 2, 2.0f);
+        setupProbeCubemap();
 
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
     }
@@ -78,6 +80,8 @@ public:
                                       {GL_FRAGMENT_SHADER, "shaders/point_frag.glsl"} });
             m_shaderManager->loadShader("depth", { {GL_VERTEX_SHADER, "shaders/depth_vert.glsl"},
                           {GL_FRAGMENT_SHADER, "shaders/depth_frag.glsl"} });
+			m_shaderManager->loadShader("depthcubemap", { {GL_VERTEX_SHADER, "shaders/depthcubemap_vert.glsl"},
+							  {GL_FRAGMENT_SHADER, "shaders/depthcubemap_frag.glsl"} });
 
             // Any new shaders can be added below in similar fashion.
             // ==> Don't forget to reconfigure CMake when you do!
@@ -271,7 +275,7 @@ public:
         glViewport(0, 0, 1024, 1024);
     }
 
-    void initializeProbeGrid(int gridSizeX = 3, int gridSizeY = 3, int gridSizeZ = 3, float spacing = 1.0f) {
+    void initializeProbeGrid(int gridSizeX = 2, int gridSizeY = 2, int gridSizeZ = 2, float spacing = 1.0f) {
         // Calculate the offsets to center the grid around the origin
         float offsetX = (gridSizeX - 1) * spacing / 2.0f;
         float offsetY = (gridSizeY - 1) * spacing / 2.0f;
@@ -287,7 +291,78 @@ public:
         }
     }
 
+    void setupProbeCubemap() {
+        glGenFramebuffers(1, &captureFBO);
+        glGenRenderbuffers(1, &captureRBO);
 
+        glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
+
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+        for (const auto& probePosition : m_probePositions) {
+            unsigned int probeCubemap;
+			glGenTextures(1, &probeCubemap);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, probeCubemap);
+            for (unsigned int i = 0; i < 6; ++i)
+            {
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 512, 512, 0, GL_RGB, GL_FLOAT, nullptr);
+            }
+
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, m_nearPlane, m_farPlane);
+
+
+            glm::mat4 captureViews[] = {
+            glm::lookAt(probePosition, probePosition + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)),  // +X
+            glm::lookAt(probePosition, probePosition + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)), // -X
+            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),   // +Y
+            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)), // -Y
+            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)),  // +Z
+            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f))  // -Z
+            };
+
+            Shader& depthShader = m_shaderManager->getShader("depth");
+            depthShader.bind();
+
+            glViewport(0, 0, 512, 512); // Configure the viewport to the capture dimensions.
+            glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+
+            for (unsigned int face = 0; face < 6; ++face) {
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, probeCubemap, 0);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+                auto& dragonMesh = m_meshManager->getMeshes("dragon");
+                for (auto& mesh : dragonMesh) {
+                    glm::mat4 mvpMatrix = captureProjection * captureViews[face] * glm::mat4(1.0f);
+                    glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
+                    glUniform1f(1, m_nearPlane);
+                    glUniform1f(2, m_farPlane);
+                    mesh.draw(depthShader);
+                }
+
+                auto& floorMesh = m_meshManager->getMeshes("floor");
+                for (auto& mesh : floorMesh) {
+                    glm::mat4 mvpMatrix = captureProjection * captureViews[face] * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, m_planePosition, 0.0f));
+                    glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
+                    glUniform1f(1, m_nearPlane);
+                    glUniform1f(2, m_farPlane);
+                    mesh.draw(depthShader);
+                }
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            // Store the generated cubemap
+            m_probeCubemaps.push_back(probeCubemap);
+        }
+    }
 
     void update()
     {
@@ -327,6 +402,8 @@ public:
         ImGui::SliderFloat("X", &m_pointX, 0.0f, 1.0f);
         ImGui::SliderFloat("Y", &m_pointY, 0.0f, 1.0f);
         ImGui::SliderFloat("Z", &m_pointZ, 0.0f, 1.0f);
+        ImGui::SliderInt("Probe Index", &m_probeIndex, 0, 7);
+		ImGui::SliderFloat("Plane Position", &m_planePosition, -1.0f, 1.0f);
         ImGui::End();
 
         //// Point light window
@@ -377,32 +454,30 @@ public:
         //glDisable(GL_BLEND);
 
         // Render dragon mesh
-        //RenderMeshOptions dragonOptions{
-        //	.shaderName = "default",
-        //	.meshName = "dragon",
-        //	.modelMatrix = glm::mat4(1.0f),
-        //	.camera = m_camera,
-        //	.albedo = glm::vec3(1.0f, 1.0f, 1.0f),
-        //	.metallic = 0.0f,
-        //	.roughness = 0.5f
-        //};
-        //renderMesh(dragonOptions);
-
-        auto& meshes = m_meshManager->getMeshes("dragon");
-        glm::mat4 modelMatrix = glm::mat4(1.0f);
-        const glm::mat4 mvpMatrix = m_projectionMatrix * m_camera.viewMatrix() * glm::mat4(1.0f);
-        for (auto& mesh : meshes) {
-            Shader& shader = m_shaderManager->getShader("depth");
-            shader.bind();
-
-            glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-            glUniform1f(1, m_nearPlane);
-            glUniform1f(2, m_farPlane);
-
-            mesh.draw(shader);
-        }
+        RenderMeshOptions dragonOptions{
+        	.shaderName = "default",
+        	.meshName = "dragon",
+        	.modelMatrix = glm::mat4(1.0f),
+        	.camera = m_camera,
+        	.albedo = glm::vec3(1.0f, 1.0f, 1.0f),
+        	.metallic = 0.0f,
+        	.roughness = 0.5f
+        };
+        renderMesh(dragonOptions);
 
 
+
+        // Render floor mesh
+        RenderMeshOptions floorOptions{
+            .shaderName = "default",
+            .meshName = "floor",
+            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, m_planePosition, 0.0f)),
+            .camera = m_camera,
+            .albedo = glm::vec3(1.0f, 1.0f, 1.0f),
+            .metallic = 0.0f,
+            .roughness = 0.5f
+        };
+        renderMesh(floorOptions);
 
         // Render a point for the location of the point light
         //renderPoint(m_lightPos, m_lightColor);
@@ -412,13 +487,67 @@ public:
             renderSkybox();
         }
 
-        // Render the interpolation point and visualize weights
-        glm::vec3 interpolatedPoint = getInterpolatedPoint(m_pointX, m_pointY, m_pointZ);
-        std::vector<float> weights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
+        //setupProbeCubemap();
+        // Bind the cube map
+        glBindTexture(GL_TEXTURE_CUBE_MAP, m_probeCubemaps[m_probeIndex]);
 
-        renderProbes(weights);
-        // Render the interpolation point
-        renderPoint(interpolatedPoint, glm::vec3(0.0f, 1.0f, 0.0f)); // Green color
+        // Define cube map faces for reference
+        GLenum cubeMapFaces[6] = {
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+        };
+
+        // Get the interpolated point at tX, tY, tZ
+        glm::vec3 interpolatedPoint = getInterpolatedPoint(m_pointX, m_pointY, m_pointZ);
+
+        // Base trilinear weights without geometry awareness
+        std::vector<float> trilinearWeights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
+
+        // Initialize a container for geometry-aware weights
+        std::vector<float> geometryAwareWeights(8, 0.0f);
+
+        // Iterate over each probe
+        for (int probeIndex = 0; probeIndex < 8; ++probeIndex) {
+            // Retrieve and bind each probe's cube map
+            glBindTexture(GL_TEXTURE_CUBE_MAP, m_probeCubemaps[probeIndex]);
+
+            // Retrieve the data for each face of this probe
+            std::vector<std::vector<glm::vec3>> texData(6, std::vector<glm::vec3>(512 * 512));
+            for (int face = 0; face < 6; ++face) {
+                glGetTexImage(cubeMapFaces[face], 0, GL_RGB, GL_FLOAT, texData[face].data());
+            }
+
+            // Calculate mean and variance for the current probe
+            float E_r, E_r2;
+            calculateMoment(texData, E_r, E_r2);
+            float variance = std::abs(E_r2 - (E_r * E_r));
+
+            // Compute distance between the probe and the interpolation point
+            glm::vec3 probePosition = m_probePositions[probeIndex];
+            float distToProbe = glm::length(probePosition - interpolatedPoint);
+
+            // Apply the Chebyshev inequality test
+            float chebyshevWeight = variance / (variance + glm::pow(distToProbe - E_r, 2.0f));
+
+            // Factor in Chebyshev with the trilinear weight
+            geometryAwareWeights[probeIndex] = trilinearWeights[probeIndex] * ((distToProbe <= E_r) ? 1.0f : glm::max(chebyshevWeight, 0.0f));
+        }
+
+        // Normalize the geometry-aware weights to ensure they sum to 1
+        float totalWeight = std::accumulate(geometryAwareWeights.begin(), geometryAwareWeights.end(), 0.0f);
+        for (auto& weight : geometryAwareWeights) {
+            weight /= totalWeight;
+        }
+
+        // Render using geometry-aware weights
+        renderProbes(geometryAwareWeights);
+        renderPoint(interpolatedPoint, glm::vec3(0.0f, 1.0f, 0.0f)); // Green color for the interpolated point
+
+
     }
 
     /**
@@ -560,7 +689,6 @@ public:
 
     void renderProbes(std::vector<float> weights) {
         for (size_t i = 0; i < m_probePositions.size(); ++i) {
-            // Scale sphere size based on weight
             glm::vec3 color = glm::mix(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), weights[i]); // Color gradient from red to green
 
             glm::mat4 modelMatrix = glm::translate(glm::mat4(1.0f), m_probePositions[i]);
@@ -668,7 +796,8 @@ public:
         // Draws the cubemap as the last object so we can save a bit of performance by discarding all fragments
         // where an object is present (a depth of 1.0f will always fail against any object's depth value)
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);;
+        //glBindTexture(GL_TEXTURE_CUBE_MAP, m_probeCubemaps[m_probeIndex]);;
+        glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
         //glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap); // display irradiance map
         
         renderCube();
@@ -809,7 +938,30 @@ public:
         return { w000, w100, w010, w110, w001, w101, w011, w111 };
     }
 
+    void calculateMoment(const std::vector<std::vector<glm::vec3>>& texData, float& E_r, float& E_r2) {
+        // Initialize sums for E[r] and E[r^2]
+        float sum_r = 0.0f;
+        float sum_r2 = 0.0f;
+        int totalTexels = 0;
 
+        // Loop over each face
+        for (int face = 0; face < 6; ++face) {
+            const auto& faceData = texData[face];
+
+            // Loop over each texel in the face (512x512 for each face)
+            for (const auto& texel : faceData) {
+                float distance = texel.x;  // Assuming distance is stored in the red channel (use `.y` or `.z` if different)
+
+                sum_r += distance;
+                sum_r2 += distance * distance;
+                ++totalTexels;
+            }
+        }
+
+        // Calculate mean (E[r]) and mean of squared distances (E[r^2])
+        E_r = sum_r / totalTexels;
+        E_r2 = sum_r2 / totalTexels;
+    }
 
     
 private:
@@ -836,6 +988,10 @@ private:
 	float m_pointX = 0.5f;
 	float m_pointY = 0.5f;
 	float m_pointZ = 0.5f;
+    //unsigned int probeCubemap;
+    std::vector<unsigned int> m_probeCubemaps; // Store multiple cubemaps
+	int m_probeIndex = 0;
+    float m_planePosition = 1.0f;
 
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
