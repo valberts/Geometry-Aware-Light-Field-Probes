@@ -57,8 +57,13 @@ public:
         loadHDR();
         setupCubemap();
         setupIrradiance();
+
+		// Initialize prob grid with 2x2x2 probes and 2.0 spacing
 		initializeProbeGrid(2, 2, 2, 2.0f);
+        // Setup depth cubemaps for probes
         setupProbeCubemap();
+		// Calcluate geometry-aware weights for the point
+		// We do this here so that the weights are calculated before the first render
         geometryAwareWeights = calculateGeometryAwareWeights(m_pointX, m_pointY, m_pointZ);
     }
 
@@ -370,7 +375,6 @@ public:
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
     }
 
-
     void update()
     {
         while (!m_window.shouldClose())
@@ -437,7 +441,6 @@ public:
         ImGui::End();
     }
 
-
     void render() {
         // Render to Default Framebuffer (Main scene)
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -451,30 +454,6 @@ public:
 
         // default depth
         glDepthMask(GL_TRUE);
-        //glDepthFunc(GL_LEQUAL);
-        //glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-
-        // Had to comment some code here to see PBR shaders
-        //glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Enable color writes.
-        //glEnable(GL_BLEND); // Enable blending.
-        //glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-        //renderMesh("default", "floor", glm::mat4(1.0f), "floor_diffuse", "floor_normal");
-        //renderMesh("default", "dragon", m_player.getMatrix());
-        //glDisable(GL_BLEND);
-
-        //// Render dragon mesh
-        //RenderMeshOptions dragonOptions{
-        //	.shaderName = "default",
-        //	.meshName = "dragon",
-        //	.modelMatrix = glm::mat4(1.0f),
-        //	.camera = m_camera,
-        //	.albedo = glm::vec3(1.0f, 1.0f, 1.0f),
-        //	.metallic = 0.0f,
-        //	.roughness = 0.5f
-        //};
-        //renderMesh(dragonOptions);
-
-
 
         // Render floor mesh
         RenderMeshOptions floorOptions{
@@ -488,27 +467,30 @@ public:
         };
         renderMesh(floorOptions);
 
-        // Render a point for the location of the point light
-        //renderPoint(m_lightPos, m_lightColor);
-
         // Render skybox
         if (m_renderSkybox) {
             renderSkybox();
         }
 
+		// Get interpolated point and weights
         glm::vec3 interpolatedPoint = getInterpolatedPoint(m_pointX, m_pointY, m_pointZ);
 		std::vector<float> weights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
 
+        // Render probes with weights
 		if (m_useGeometryAwareWeights) {
 			renderProbes(geometryAwareWeights);
 		}
 		else {
 			renderProbes(weights);
 		}   
+
+		// Render interpolated point
         renderPoint(interpolatedPoint, glm::vec3(0.0f, 1.0f, 0.0f)); // Green color for the interpolated point
 
-        visualizeChebyshevTest(m_probeIndex);
+        // Plot chebyshev test
+        plotChebyshevTest(m_probeIndex);
 
+		// If we click on the ImGUI window, we want to recalculate the geometry-aware weights and cubemaps
         if (ImGui::GetIO().WantCaptureMouse) {
             setupProbeCubemap();
             geometryAwareWeights = calculateGeometryAwareWeights(m_pointX, m_pointY, m_pointZ);
@@ -653,6 +635,7 @@ public:
     }
 
     void renderProbes(std::vector<float> weights) {
+        // Render a sphere for each probe position
         for (size_t i = 0; i < m_probePositions.size(); ++i) {
             glm::vec3 color = glm::mix(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), weights[i]); // Color gradient from red to green
 
@@ -811,7 +794,6 @@ public:
     {
         //std::cout << "Key pressed: " << key << std::endl;
     }
-
     
     // In here you can handle key releases
     // key - Integer that corresponds to numbers in https://www.glfw.org/docs/latest/group__keys.html
@@ -856,6 +838,7 @@ public:
         //std::cout << "Released mouse button: " << button << std::endl;
     }
 
+	// Basic trilinear interpolation
     glm::vec3 getInterpolatedPoint(float tX, float tY, float tZ) {
         // Clamp tX, tY, tZ to [0, 1]
         tX = glm::clamp(tX, 0.0f, 1.0f);
@@ -883,6 +866,7 @@ public:
         return glm::mix(p0, p1, tZ);
     }
 
+	// Calculate trilinear weights
     std::vector<float> getTrilinearWeights(float tX, float tY, float tZ) {
         // Clamp tX, tY, tZ to [0, 1]
         tX = glm::clamp(tX, 0.0f, 1.0f);
@@ -902,6 +886,7 @@ public:
         return { w000, w100, w010, w110, w001, w101, w011, w111 };
     }
 
+	// Calculate the first and second moments of the distance field
     void calculateMoment(const std::vector<std::vector<glm::vec3>>& texData, float& E_r, float& E_r2) {
         // Initialize sums for E[r] and E[r^2]
         float sum_r = 0.0f;
@@ -927,6 +912,7 @@ public:
         E_r2 = sum_r2 / totalTexels;
     }
 
+	// Geometry aware weight calculation using Chebyshev distance
     std::vector<float> calculateGeometryAwareWeights(float tX, float tY, float tZ) {
         std::vector<float> trilinearWeights = getTrilinearWeights(tX, tY, tZ);
         std::vector<float> geometryAwareWeights(8, 0.0f);
@@ -971,8 +957,9 @@ public:
         return geometryAwareWeights;
     }
 
-    void visualizeChebyshevTest(int probeIndex) {
-        const float maxDistance = 0.5f; // Adjust to the maximum distance relevant for your scene
+	// Plot chebyshev weight function for a specified probe
+    void plotChebyshevTest(int probeIndex) {
+        const float maxDistance = 0.5f; 
         const int samplePoints = 50;
 
         std::vector<float> distances(samplePoints);
@@ -1013,9 +1000,6 @@ public:
         ImGui::End();
     }
 
-
-
-
 private:
     Window m_window;
     Camera m_camera;
@@ -1040,7 +1024,6 @@ private:
 	float m_pointX = 0.5f;
 	float m_pointY = 0.5f;
 	float m_pointZ = 0.5f;
-    //unsigned int probeCubemap;
     std::vector<unsigned int> m_probeCubemaps; // Store multiple cubemaps
     float m_planePosition = 0.0f;
     bool m_useGeometryAwareWeights = false;
