@@ -59,8 +59,7 @@ public:
         setupIrradiance();
 		initializeProbeGrid(2, 2, 2, 2.0f);
         setupProbeCubemap();
-
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        geometryAwareWeights = calculateGeometryAwareWeights(m_pointX, m_pointY, m_pointZ);
     }
 
     void setupShaders()
@@ -292,6 +291,21 @@ public:
     }
 
     void setupProbeCubemap() {
+        // Clean up previously created cubemaps if they exist
+        for (auto& cubemap : m_probeCubemaps) {
+            glDeleteTextures(1, &cubemap);
+        }
+        m_probeCubemaps.clear();
+
+        // Delete framebuffer and renderbuffer if they were previously created
+        if (captureFBO) {
+            glDeleteFramebuffers(1, &captureFBO);
+        }
+        if (captureRBO) {
+            glDeleteRenderbuffers(1, &captureRBO);
+        }
+
+        // Re-generate framebuffer and renderbuffer for new captures
         glGenFramebuffers(1, &captureFBO);
         glGenRenderbuffers(1, &captureRBO);
 
@@ -300,14 +314,15 @@ public:
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
 
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
+        // Loop over probe positions and generate cubemaps for each
         for (const auto& probePosition : m_probePositions) {
             unsigned int probeCubemap;
-			glGenTextures(1, &probeCubemap);
+            glGenTextures(1, &probeCubemap);
             glBindTexture(GL_TEXTURE_CUBE_MAP, probeCubemap);
-            for (unsigned int i = 0; i < 6; ++i)
-            {
+
+            for (unsigned int i = 0; i < 6; ++i) {
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 512, 512, 0, GL_RGB, GL_FLOAT, nullptr);
             }
 
@@ -319,34 +334,24 @@ public:
 
             glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, m_nearPlane, m_farPlane);
 
-
             glm::mat4 captureViews[] = {
-            glm::lookAt(probePosition, probePosition + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)),  // +X
-            glm::lookAt(probePosition, probePosition + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)), // -X
-            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),   // +Y
-            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)), // -Y
-            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)),  // +Z
-            glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f))  // -Z
+                glm::lookAt(probePosition, probePosition + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)),  // +X
+                glm::lookAt(probePosition, probePosition + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)), // -X
+                glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),   // +Y
+                glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)), // -Y
+                glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)),  // +Z
+                glm::lookAt(probePosition, probePosition + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f))  // -Z
             };
 
             Shader& depthShader = m_shaderManager->getShader("depth");
             depthShader.bind();
 
-            glViewport(0, 0, 512, 512); // Configure the viewport to the capture dimensions.
+            glViewport(0, 0, 512, 512);
             glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
 
             for (unsigned int face = 0; face < 6; ++face) {
                 glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, probeCubemap, 0);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-                auto& dragonMesh = m_meshManager->getMeshes("dragon");
-                for (auto& mesh : dragonMesh) {
-                    glm::mat4 mvpMatrix = captureProjection * captureViews[face] * glm::mat4(1.0f);
-                    glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-                    glUniform1f(1, m_nearPlane);
-                    glUniform1f(2, m_farPlane);
-                    mesh.draw(depthShader);
-                }
 
                 auto& floorMesh = m_meshManager->getMeshes("floor");
                 for (auto& mesh : floorMesh) {
@@ -362,7 +367,9 @@ public:
             // Store the generated cubemap
             m_probeCubemaps.push_back(probeCubemap);
         }
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
     }
+
 
     void update()
     {
@@ -377,57 +384,59 @@ public:
         }
     }
 
-    void processInput()
-    {
+    void processInput() {
         m_camera.updateInput();
         m_window.updateInput();
 
-
-        //// Use ImGui for easy input/output of ints, floats, strings, etc...
-        //ImGui::Begin("Window");
-        //ImGui::Checkbox("Normal Mapping", &m_enableNormalMapping);
-        ////ImGui::Checkbox("Use material if no texture", &m_useMaterial);
-        //ImGui::Checkbox("Skybox", &m_renderSkybox);
-        //ImGui::End();
-
-        //// PBR Shading window;
-        //ImGui::Begin("PBR");
-        //ImGui::ColorEdit3("Albedo", (float*)&m_albedo);
-        //ImGui::SliderFloat("Metallic", &m_metallic, 0.0f, 1.0f);
-        //ImGui::SliderFloat("Roughness", &m_roughness, 0.0f, 1.0f);
-        //ImGui::End();
-
-        // Interpolation point window
         ImGui::Begin("Interpolation Point");
         ImGui::SliderFloat("X", &m_pointX, 0.0f, 1.0f);
         ImGui::SliderFloat("Y", &m_pointY, 0.0f, 1.0f);
         ImGui::SliderFloat("Z", &m_pointZ, 0.0f, 1.0f);
-        ImGui::SliderInt("Probe Index", &m_probeIndex, 0, 7);
-		ImGui::SliderFloat("Plane Position", &m_planePosition, -1.0f, 1.0f);
+        ImGui::SliderFloat("Plane Position", &m_planePosition, -1.0f, 1.0f);
+		ImGui::SliderInt("Probe to Visualize", &m_probeIndex, 0, m_probePositions.size() - 1);
+        ImGui::Checkbox("Use Geometry-Aware Weights", &m_useGeometryAwareWeights);  // Toggle checkbox
         ImGui::End();
 
-        //// Point light window
-        //ImGui::Begin("Light Controls");
-        //// Light Position Control
-        //ImGui::Text("Light Position");
-        //ImGui::DragFloat3("Position", glm::value_ptr(m_lightPos), 0.1f, -20.0f, 20.0f);
+        // Calculate weights based on toggle
+        std::vector<float> weights;
+        if (m_useGeometryAwareWeights) {
+            weights = geometryAwareWeights;
+        }
+        else {
+            weights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
+        }
 
-        //// Light Color Control
-        //ImGui::Text("Light Color");
-        //(ImGui::ColorEdit3("Color", glm::value_ptr(m_lightColor)));
-        //ImGui::End();
-
-        // Interpolation weights view
-        std::vector<float> weights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
+        // Display the weights
         ImGui::Begin("Probe Interpolation Weights");
+        // Add a description
+        ImGui::Text("Probe Weight Color Scale");
+
+        // Draw a horizontal color bar from red (low) to green (high)
+        ImVec2 barSize = ImVec2(100, 20);  // Width x Height of the bar
+        for (int i = 0; i <= 100; ++i) {
+            float t = i / 100.0f;
+            ImVec4 color = ImVec4(1.0f - t, t, 0.0f, 1.0f); // Interpolate red to green
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(ImGui::GetCursorScreenPos().x + i, ImGui::GetCursorScreenPos().y),
+                ImVec2(ImGui::GetCursorScreenPos().x + i + 1, ImGui::GetCursorScreenPos().y + barSize.y),
+                ImGui::ColorConvertFloat4ToU32(color)
+            );
+        }
+        ImGui::Dummy(barSize); // Reserve space for the bar
+
+        // Add labels for Low and High values
+        ImGui::Text("0.0"); ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + barSize.x - ImGui::CalcTextSize("High").x);
+        ImGui::Text("1.0");
+
         ImVec4 color;
         for (size_t i = 0; i < weights.size(); ++i) {
-            // Map the weight to a color gradient (e.g., from blue to red)
             color = ImVec4(1.0f - weights[i], weights[i], 0.0f, 1.0f); // Red to green gradient
             ImGui::TextColored(color, "w%03d: %.2f", i, weights[i]);
         }
         ImGui::End();
     }
+
 
     void render() {
         // Render to Default Framebuffer (Main scene)
@@ -453,17 +462,17 @@ public:
         //renderMesh("default", "dragon", m_player.getMatrix());
         //glDisable(GL_BLEND);
 
-        // Render dragon mesh
-        RenderMeshOptions dragonOptions{
-        	.shaderName = "default",
-        	.meshName = "dragon",
-        	.modelMatrix = glm::mat4(1.0f),
-        	.camera = m_camera,
-        	.albedo = glm::vec3(1.0f, 1.0f, 1.0f),
-        	.metallic = 0.0f,
-        	.roughness = 0.5f
-        };
-        renderMesh(dragonOptions);
+        //// Render dragon mesh
+        //RenderMeshOptions dragonOptions{
+        //	.shaderName = "default",
+        //	.meshName = "dragon",
+        //	.modelMatrix = glm::mat4(1.0f),
+        //	.camera = m_camera,
+        //	.albedo = glm::vec3(1.0f, 1.0f, 1.0f),
+        //	.metallic = 0.0f,
+        //	.roughness = 0.5f
+        //};
+        //renderMesh(dragonOptions);
 
 
 
@@ -471,7 +480,7 @@ public:
         RenderMeshOptions floorOptions{
             .shaderName = "default",
             .meshName = "floor",
-            .modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, m_planePosition, 0.0f)),
+            .modelMatrix = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, m_planePosition, 0.0f)), glm::vec3(2.0f, 2.0f, 2.0f)),
             .camera = m_camera,
             .albedo = glm::vec3(1.0f, 1.0f, 1.0f),
             .metallic = 0.0f,
@@ -487,67 +496,23 @@ public:
             renderSkybox();
         }
 
-        //setupProbeCubemap();
-        // Bind the cube map
-        glBindTexture(GL_TEXTURE_CUBE_MAP, m_probeCubemaps[m_probeIndex]);
-
-        // Define cube map faces for reference
-        GLenum cubeMapFaces[6] = {
-            GL_TEXTURE_CUBE_MAP_POSITIVE_X,
-            GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
-            GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
-            GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
-            GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
-            GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
-        };
-
-        // Get the interpolated point at tX, tY, tZ
         glm::vec3 interpolatedPoint = getInterpolatedPoint(m_pointX, m_pointY, m_pointZ);
+		std::vector<float> weights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
 
-        // Base trilinear weights without geometry awareness
-        std::vector<float> trilinearWeights = getTrilinearWeights(m_pointX, m_pointY, m_pointZ);
-
-        // Initialize a container for geometry-aware weights
-        std::vector<float> geometryAwareWeights(8, 0.0f);
-
-        // Iterate over each probe
-        for (int probeIndex = 0; probeIndex < 8; ++probeIndex) {
-            // Retrieve and bind each probe's cube map
-            glBindTexture(GL_TEXTURE_CUBE_MAP, m_probeCubemaps[probeIndex]);
-
-            // Retrieve the data for each face of this probe
-            std::vector<std::vector<glm::vec3>> texData(6, std::vector<glm::vec3>(512 * 512));
-            for (int face = 0; face < 6; ++face) {
-                glGetTexImage(cubeMapFaces[face], 0, GL_RGB, GL_FLOAT, texData[face].data());
-            }
-
-            // Calculate mean and variance for the current probe
-            float E_r, E_r2;
-            calculateMoment(texData, E_r, E_r2);
-            float variance = std::abs(E_r2 - (E_r * E_r));
-
-            // Compute distance between the probe and the interpolation point
-            glm::vec3 probePosition = m_probePositions[probeIndex];
-            float distToProbe = glm::length(probePosition - interpolatedPoint);
-
-            // Apply the Chebyshev inequality test
-            float chebyshevWeight = variance / (variance + glm::pow(distToProbe - E_r, 2.0f));
-
-            // Factor in Chebyshev with the trilinear weight
-            geometryAwareWeights[probeIndex] = trilinearWeights[probeIndex] * ((distToProbe <= E_r) ? 1.0f : glm::max(chebyshevWeight, 0.0f));
-        }
-
-        // Normalize the geometry-aware weights to ensure they sum to 1
-        float totalWeight = std::accumulate(geometryAwareWeights.begin(), geometryAwareWeights.end(), 0.0f);
-        for (auto& weight : geometryAwareWeights) {
-            weight /= totalWeight;
-        }
-
-        // Render using geometry-aware weights
-        renderProbes(geometryAwareWeights);
+		if (m_useGeometryAwareWeights) {
+			renderProbes(geometryAwareWeights);
+		}
+		else {
+			renderProbes(weights);
+		}   
         renderPoint(interpolatedPoint, glm::vec3(0.0f, 1.0f, 0.0f)); // Green color for the interpolated point
 
+        visualizeChebyshevTest(m_probeIndex);
 
+        if (ImGui::GetIO().WantCaptureMouse) {
+            setupProbeCubemap();
+            geometryAwareWeights = calculateGeometryAwareWeights(m_pointX, m_pointY, m_pointZ);
+        }
     }
 
     /**
@@ -844,7 +809,7 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyPressed(int key, int mods)
     {
-        std::cout << "Key pressed: " << key << std::endl;
+        //std::cout << "Key pressed: " << key << std::endl;
     }
 
     
@@ -853,14 +818,14 @@ public:
     // mods - Any modifier keys pressed, like shift or control
     void onKeyReleased(int key, int mods)
     {
-        std::cout << "Key released: " << key << std::endl;
+        //std::cout << "Key released: " << key << std::endl;
     }
 
     // If the mouse is moved this function will be called with the x, y screen-coordinates of the mouse
     void onMouseMove(const glm::dvec2 &cursorPos)
     {
+		//std::cout << "Mouse at position: " << cursorPos.x << " " << cursorPos.y << std::endl;
         m_mousePos = cursorPos;
-        //std::cout << "Mouse at position: " << cursorPos.x << " " << cursorPos.y << std::endl;
     }
 
     // If one of the mouse buttons is pressed this function will be called
@@ -890,7 +855,6 @@ public:
     {
         //std::cout << "Released mouse button: " << button << std::endl;
     }
-
 
     glm::vec3 getInterpolatedPoint(float tX, float tY, float tZ) {
         // Clamp tX, tY, tZ to [0, 1]
@@ -963,7 +927,95 @@ public:
         E_r2 = sum_r2 / totalTexels;
     }
 
-    
+    std::vector<float> calculateGeometryAwareWeights(float tX, float tY, float tZ) {
+        std::vector<float> trilinearWeights = getTrilinearWeights(tX, tY, tZ);
+        std::vector<float> geometryAwareWeights(8, 0.0f);
+
+        // Define cube map faces for reference
+        GLenum cubeMapFaces[6] = {
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+            GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+        };
+
+        // Calculate geometry-aware weights for each probe
+        for (int probeIndex = 0; probeIndex < 8; ++probeIndex) {
+            glBindTexture(GL_TEXTURE_CUBE_MAP, m_probeCubemaps[probeIndex]);
+
+            std::vector<std::vector<glm::vec3>> texData(6, std::vector<glm::vec3>(512 * 512));
+            for (int face = 0; face < 6; ++face) {
+                glGetTexImage(cubeMapFaces[face], 0, GL_RGB, GL_FLOAT, texData[face].data());
+            }
+
+            float E_r, E_r2;
+            calculateMoment(texData, E_r, E_r2);
+            float variance = std::abs(E_r2 - (E_r * E_r));
+
+            glm::vec3 probePosition = m_probePositions[probeIndex];
+            glm::vec3 interpolatedPoint = getInterpolatedPoint(tX, tY, tZ);
+            float distToProbe = glm::length(probePosition - interpolatedPoint);
+            float chebyshevWeight = variance / (variance + glm::pow(distToProbe - E_r, 2.0f));
+
+            geometryAwareWeights[probeIndex] = trilinearWeights[probeIndex] * ((distToProbe <= E_r) ? 1.0f : glm::max(chebyshevWeight, 0.0f));
+        }
+
+        // Normalize
+        float totalWeight = std::accumulate(geometryAwareWeights.begin(), geometryAwareWeights.end(), 0.0f);
+        for (auto& weight : geometryAwareWeights) {
+            weight /= totalWeight;
+        }
+
+        return geometryAwareWeights;
+    }
+
+    void visualizeChebyshevTest(int probeIndex) {
+        const float maxDistance = 0.5f; // Adjust to the maximum distance relevant for your scene
+        const int samplePoints = 50;
+
+        std::vector<float> distances(samplePoints);
+        std::vector<float> chebyshevWeights(samplePoints);
+
+        // Bind the cubemap for the selected probe
+        glBindTexture(GL_TEXTURE_CUBE_MAP, m_probeCubemaps[probeIndex]);
+
+        // Fetch texture data and calculate the moments
+        std::vector<std::vector<glm::vec3>> texData(6, std::vector<glm::vec3>(512 * 512));
+        for (int face = 0; face < 6; ++face) {
+            glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGB, GL_FLOAT, texData[face].data());
+        }
+
+        float E_r, E_r2;
+        calculateMoment(texData, E_r, E_r2);
+        float variance = std::abs(E_r2 - (E_r * E_r));
+
+        // Calculate Chebyshev weight for a range of distances
+        for (int i = 0; i < samplePoints; ++i) {
+            float dist = (i / static_cast<float>(samplePoints)) * maxDistance;
+            float chebyshevWeight = variance / (variance + glm::pow(dist - E_r, 2.0f));
+            distances[i] = dist;
+            chebyshevWeights[i] = glm::max(chebyshevWeight, 0.0f);
+        }
+
+        // Plot the weight function with axis labels and scale
+        ImGui::Begin("Chebyshev Weight Function");
+
+        // Title and description
+        ImGui::Text("Chebyshev Weight vs Distance for Probe %d", probeIndex);
+        ImGui::Text("Distance (X) vs. Weight (Y)");
+
+        // Draw the plot with custom range and size
+        ImGui::PlotLines("", chebyshevWeights.data(), samplePoints, 0, nullptr, 0.0f, 1.0f, ImVec2(200, 200));
+
+        ImGui::Text("Distance Range (0 - %.1f units)", maxDistance);
+        ImGui::End();
+    }
+
+
+
+
 private:
     Window m_window;
     Camera m_camera;
@@ -981,7 +1033,7 @@ private:
     bool m_useMaterial{ true };
     bool m_renderSkybox{ true };
 	float m_nearPlane = 0.1f;
-    float m_farPlane = 5.0f;
+    float m_farPlane = 10.0f;
 
 	// Probe variables
     std::vector<glm::vec3> m_probePositions;  // Stores probe positions
@@ -990,8 +1042,10 @@ private:
 	float m_pointZ = 0.5f;
     //unsigned int probeCubemap;
     std::vector<unsigned int> m_probeCubemaps; // Store multiple cubemaps
-	int m_probeIndex = 0;
-    float m_planePosition = 1.0f;
+    float m_planePosition = 0.0f;
+    bool m_useGeometryAwareWeights = false;
+    std::vector<float> geometryAwareWeights;
+    int m_probeIndex = 0;
 
     // PBR variable
     glm::vec3 m_albedo = glm::vec3(1.0f);
